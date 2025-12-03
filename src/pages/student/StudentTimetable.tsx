@@ -1,25 +1,23 @@
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Clock3 } from "lucide-react";
-
-const timetable = [
-  {
-    day: "Thứ 2",
-    slots: [
-      { time: "Tiết 1-3", course: "CTDL & GT", room: "B1-103" },
-      { time: "Tiết 4-6", course: "Triết học Mác – Lênin", room: "C2-201" },
-    ],
-  },
-  {
-    day: "Thứ 3",
-    slots: [{ time: "Tiết 4-6", course: "Cơ sở dữ liệu", room: "B1-203" }],
-  },
-  {
-    day: "Thứ 5",
-    slots: [{ time: "Tiết 1-3", course: "Hệ điều hành", room: "A2-401" }],
-  },
-];
+import { CalendarDays, Clock3, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import TimetableCell from "@/components/student/TimetableCell";
+import { timetableWeeks } from "@/mocks/student";
 
 const StudentTimetable = () => {
+  const [weekIndex, setWeekIndex] = useState(0);
+  const activeWeek = useMemo(() => timetableWeeks[weekIndex] ?? timetableWeeks[0], [weekIndex]);
+
+  const handleWeekChange = (direction: "prev" | "next") => {
+    setWeekIndex((current) => {
+      if (direction === "prev") {
+        return current === 0 ? 0 : current - 1;
+      }
+      return current === timetableWeeks.length - 1 ? current : current + 1;
+    });
+  };
+
   return (
     <section aria-labelledby="student-timetable-heading" className="space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -32,7 +30,7 @@ const StudentTimetable = () => {
           </p>
         </div>
         <div className="pill-badge flex items-center gap-2">
-          <CalendarDays className="h-3.5 w-3.5" /> HK2 2025–2026 · Tuần 12
+          <CalendarDays className="h-3.5 w-3.5" /> {activeWeek.label}
         </div>
       </div>
 
@@ -44,32 +42,46 @@ const StudentTimetable = () => {
               Bố cục dạng lưới (Thứ &amp; Tiết học) giống trong tài liệu yêu cầu.
             </p>
           </div>
-          <Clock3 className="h-5 w-5 text-primary" />
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => handleWeekChange("prev")} disabled={weekIndex === 0}>
+              Tuần trước
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleWeekChange("next")}
+              disabled={weekIndex === timetableWeeks.length - 1}
+            >
+              Tuần sau
+            </Button>
+            <Clock3 className="h-5 w-5 text-primary" />
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
-            {timetable.map((column) => (
-              <div key={column.day} className="space-y-2 rounded-xl bg-secondary/60 p-3">
-                <p className="text-sm font-semibold">{column.day}</p>
+            {activeWeek.days.map((day) => (
+              <div key={day.day} className="space-y-2 rounded-xl bg-secondary/60 p-3">
+                <p className="text-sm font-semibold">{day.day}</p>
                 <div className="space-y-2 text-xs">
-                  {column.slots.map((slot) => (
-                    <div key={`${column.day}-${slot.time}`} className="schedule-slot">
-                      <div className="text-left">
-                        <p className="font-medium">{slot.course}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {slot.time} • Phòng {slot.room}
-                        </p>
-                      </div>
-                    </div>
+                  {day.slots.map((slot) => (
+                    <TimetableCell
+                      key={slot.id}
+                      course={slot.course}
+                      time={slot.period}
+                      room={slot.room}
+                      status={slot.status ?? "normal"}
+                      note={slot.changeNote}
+                    />
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Lưu ý: Trong bản triển khai thật, lưới thời khóa biểu có thể hiển thị đầy đủ từ Thứ 2–Chủ nhật và Tiết
-            1–12 với tooltip chi tiết khi rê chuột vào từng ô.
-          </p>
+
+          <div className="rounded-xl border border-dashed bg-muted/40 p-4 text-xs text-muted-foreground">
+            <Info className="mr-2 inline h-3.5 w-3.5" />
+            Các ô màu vàng cho biết buổi học có thay đổi (đổi phòng / học bù), màu đỏ cho biết buổi học bị hủy.
+          </div>
         </CardContent>
       </Card>
     </section>

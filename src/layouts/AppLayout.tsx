@@ -25,6 +25,9 @@ import {
   School,
   FileText,
   Users,
+  BookOpen,
+  ListChecks,
+  History,
 } from "lucide-react";
 
 export type Role = "student" | "lecturer" | "admin";
@@ -48,8 +51,11 @@ type NavItem = {
 
 const navByRole: Record<Role, NavItem[]> = {
   student: [
-    { label: "Dashboard", to: "/student", icon: LayoutDashboard },
-    { label: "Đăng ký học phần", to: "/student/registration", icon: ClipboardList },
+    { label: "Dashboard", to: "/student/dashboard", icon: LayoutDashboard },
+    { label: "Tra cứu CTĐT", to: "/student/curriculum", icon: BookOpen },
+    { label: "Đăng ký học phần", to: "/registration", icon: ClipboardList },
+    { label: "Quản lý ĐK cá nhân", to: "/student/registration/manage", icon: ListChecks },
+    { label: "Lịch sử ĐKHP", to: "/student/registration/history", icon: History },
     { label: "Thời khóa biểu", to: "/student/timetable", icon: CalendarDays },
     { label: "Kết quả học tập", to: "/student/transcript", icon: FileText },
   ],
@@ -112,6 +118,17 @@ export const AppLayout = ({ role, children }: AppLayoutProps) => {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          <div className="mt-auto px-4 pb-6 text-center">
+            <div className="rounded-2xl border border-sidebar-border/60 bg-sidebar-accent/10 px-3 py-4">
+              <img
+                src="/uit_logo.png"
+                alt="University of Information Technology"
+                className="mx-auto mb-2 h-20 w-auto object-contain"
+              />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sidebar-foreground/80">UIT Partner</p>
+              <p className="text-[10px] text-sidebar-foreground/60">ĐH CNTT – ĐHQG TP.HCM</p>
+            </div>
+          </div>
         </SidebarContent>
       </Sidebar>
 

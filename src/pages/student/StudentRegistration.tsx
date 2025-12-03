@@ -1,80 +1,38 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpenCheck, Filter, Info, Search } from "lucide-react";
-
-interface OpenClassRow {
-  id: number;
-  code: string;
-  name: string;
-  faculty: string;
-  credits: number;
-  capacity: number;
-  enrolled: number;
-  status: "available" | "full" | "conflict";
-  time: string;
-}
-
-const OPEN_CLASSES: OpenClassRow[] = [
-  {
-    id: 1,
-    code: "CTDLGT202-01",
-    name: "Cấu trúc dữ liệu & Giải thuật",
-    faculty: "CNTT",
-    credits: 3,
-    capacity: 80,
-    enrolled: 72,
-    status: "available",
-    time: "T2 (1-3) • B1-103",
-  },
-  {
-    id: 2,
-    code: "CSDL204-02",
-    name: "Cơ sở dữ liệu",
-    faculty: "CNTT",
-    credits: 3,
-    capacity: 80,
-    enrolled: 80,
-    status: "full",
-    time: "T3 (4-6) • B1-203",
-  },
-  {
-    id: 3,
-    code: "HDH205-01",
-    name: "Hệ điều hành",
-    faculty: "CNTT",
-    credits: 3,
-    capacity: 60,
-    enrolled: 40,
-    status: "conflict",
-    time: "T2 (1-3) • A2-401 (Trùng CTDL & GT)",
-  },
-];
+import SeatIndicator from "@/components/student/SeatIndicator";
+import { mockRegistrationSummary, openClasses, OpenClassRow } from "@/mocks/student";
+import { Badge } from "@/components/ui/badge";
 
 const StudentRegistration = () => {
   const { toast } = useToast();
   const [keyword, setKeyword] = useState("");
   const [faculty, setFaculty] = useState("tat-ca");
+  const [blockingClass, setBlockingClass] = useState<OpenClassRow | null>(null);
+
+  const filterOptions = useMemo(
+    () => Array.from(new Set(openClasses.map((row) => row.faculty))),
+    [],
+  );
+
+  const filtered = openClasses.filter((row) => {
+    const matchKeyword =
+      !keyword ||
+      row.code.toLowerCase().includes(keyword.toLowerCase()) ||
+      row.name.toLowerCase().includes(keyword.toLowerCase());
+    const matchFaculty = faculty === "tat-ca" || row.faculty === faculty;
+    return matchKeyword && matchFaculty;
+  });
 
   const handleRegister = (row: OpenClassRow) => {
-    if (row.status === "full") {
-      toast({
-        title: "Lớp đã đủ sĩ số",
-        description: "Vui lòng chọn lớp khác hoặc chuyển sang danh sách chờ.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (row.status === "conflict") {
-      toast({
-        title: "Trùng thời khóa biểu",
-        description: "Ca học này trùng với lớp bạn đã đăng ký trong tuần.",
-        variant: "destructive",
-      });
+    if (row.status !== "available") {
+      setBlockingClass(row);
       return;
     }
 
@@ -84,14 +42,17 @@ const StudentRegistration = () => {
     });
   };
 
-  const filtered = OPEN_CLASSES.filter((row) => {
-    const matchKeyword =
-      !keyword ||
-      row.code.toLowerCase().includes(keyword.toLowerCase()) ||
-      row.name.toLowerCase().includes(keyword.toLowerCase());
-    const matchFaculty = faculty === "tat-ca" || row.faculty === faculty;
-    return matchKeyword && matchFaculty;
-  });
+  const errorMessageMap: Record<Exclude<OpenClassRow["status"], "available">, string> = {
+    full: "Lớp đã đủ sĩ số. Chuyển sang danh sách chờ hoặc chọn lớp khác.",
+    conflict: "Lịch học trùng với lớp bạn đã đăng ký. Vui lòng chọn lớp khác.",
+    prerequisite: "Bạn chưa hoàn thành học phần tiên quyết. Liên hệ cố vấn nếu cần hỗ trợ.",
+    "credit-limit": "Đăng ký vượt quá số tín chỉ tối đa trong đợt này.",
+  };
+
+  const blockingMessage =
+    blockingClass && blockingClass.status !== "available"
+      ? errorMessageMap[blockingClass.status]
+      : "";
 
   return (
     <section aria-labelledby="student-registration-heading" className="space-y-6">
@@ -116,15 +77,8 @@ const StudentRegistration = () => {
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base">Danh sách lớp đang mở</CardTitle>
               <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Còn chỗ
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-destructive" /> Đầy
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-accent" /> Trùng lịch
-                </span>
+                  <span className="inline-flex items-center gap-1">•</span>
+                  <span>Trạng thái cập nhật thời gian thực</span>
               </div>
             </div>
 
@@ -145,8 +99,11 @@ const StudentRegistration = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tat-ca">Tất cả khoa</SelectItem>
-                  <SelectItem value="CNTT">Công nghệ thông tin</SelectItem>
-                  <SelectItem value="KinhTe">Kinh tế</SelectItem>
+                  {filterOptions.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -171,48 +128,41 @@ const StudentRegistration = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
-                  const ratio = `${row.enrolled}/${row.capacity}`;
-                  const statusDotClass =
-                    row.status === "available"
-                      ? "bg-emerald-500"
-                      : row.status === "full"
-                        ? "bg-destructive"
-                        : "bg-accent";
-
-                  return (
-                    <tr key={row.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-4 align-top font-medium text-foreground">{row.code}</td>
-                      <td className="py-2 pr-4 align-top">
-                        <div className="space-y-0.5">
-                          <p className="font-medium text-foreground">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">CTĐT chuẩn · Bắt buộc</p>
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 align-top text-xs text-muted-foreground">{row.faculty}</td>
-                      <td className="py-2 pr-4 align-top text-center">{row.credits}</td>
-                      <td className="py-2 pr-4 align-top">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
-                          <span>{ratio}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 align-top text-xs text-muted-foreground">{row.time}</td>
-                      <td className="py-2 align-top text-right">
-                        <Button
-                          size="sm"
-                          variant={row.status === "available" ? "default" : "outline"}
-                          disabled={row.status === "full"}
-                          onClick={() => handleRegister(row)}
-                        >
-                          {row.status === "available" && "Chọn đăng ký"}
-                          {row.status === "full" && "Đã đầy"}
-                          {row.status === "conflict" && "Trùng lịch"}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filtered.map((row) => (
+                  <tr key={row.id} className="border-b last:border-b-0">
+                    <td className="py-2 pr-4 align-top font-medium text-foreground">{row.code}</td>
+                    <td className="py-2 pr-4 align-top">
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-foreground">{row.name}</p>
+                        <p className="text-xs text-muted-foreground">Giảng viên: {row.instructor}</p>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-4 align-top text-xs text-muted-foreground">{row.faculty}</td>
+                    <td className="py-2 pr-4 align-top text-center">{row.credits}</td>
+                    <td className="py-2 pr-4 align-top">
+                      <SeatIndicator enrolled={row.enrolled} capacity={row.capacity} status={row.status} />
+                    </td>
+                    <td className="py-2 pr-4 align-top text-xs text-muted-foreground">
+                      <div className="space-y-1">
+                        <p>{row.time}</p>
+                        {row.note ? <p className="text-[11px] text-primary">{row.note}</p> : null}
+                      </div>
+                    </td>
+                    <td className="py-2 align-top text-right">
+                      <Button
+                        size="sm"
+                        variant={row.status === "available" ? "default" : "outline"}
+                        onClick={() => handleRegister(row)}
+                      >
+                        {row.status === "available" && "Chọn đăng ký"}
+                        {row.status === "full" && "Đã đầy"}
+                        {row.status === "conflict" && "Trùng lịch"}
+                        {row.status === "prerequisite" && "Thiếu tiên quyết"}
+                        {row.status === "credit-limit" && "Vượt tín chỉ"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </CardContent>
@@ -234,11 +184,13 @@ const StudentRegistration = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-secondary px-3 py-2">
                 <p className="stat-label">Tín chỉ trong kỳ</p>
-                <p className="stat-value text-xl">18</p>
+                  <p className="stat-value text-xl">{mockRegistrationSummary.minCredits + 4}</p>
               </div>
               <div className="rounded-lg bg-secondary px-3 py-2">
                 <p className="stat-label">Tín chỉ còn trống</p>
-                <p className="stat-value text-xl">6</p>
+                  <p className="stat-value text-xl">
+                    {mockRegistrationSummary.maxCredits - (mockRegistrationSummary.minCredits + 4)}
+                  </p>
               </div>
             </div>
 
@@ -259,9 +211,37 @@ const StudentRegistration = () => {
                 <li>09:58 – Thất bại "CSDL204-02" • Lớp đã đầy</li>
               </ul>
             </div>
+            <div className="rounded-xl border border-dashed p-3 text-xs">
+              <p className="font-semibold text-foreground">Quy tắc đợt ĐKHP</p>
+              <p className="text-muted-foreground">
+                Min {mockRegistrationSummary.minCredits} TC • Max {mockRegistrationSummary.maxCredits} TC • Deadline{" "}
+                {mockRegistrationSummary.deadline}
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={Boolean(blockingClass)} onOpenChange={(open) => !open && setBlockingClass(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Không thể đăng ký {blockingClass?.code}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="font-semibold text-foreground">{blockingClass?.name}</p>
+            <p className="text-muted-foreground">{blockingMessage}</p>
+            {blockingClass?.note ? (
+              <p className="text-xs text-primary">Chi tiết: {blockingClass.note}</p>
+            ) : null}
+            <Badge variant="outline" className="w-fit">
+              Liên hệ cố vấn học tập nếu cần hỗ trợ override.
+            </Badge>
+          </div>
+          <Button onClick={() => setBlockingClass(null)} className="mt-4 self-end">
+            Đã hiểu
+          </Button>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 };

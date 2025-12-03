@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import StudentLayout from "./pages/student/StudentLayout";
@@ -10,6 +10,9 @@ import LecturerLayout from "./pages/lecturer/LecturerLayout";
 import AdminLayout from "./pages/admin/AdminLayout";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentRegistration from "./pages/student/StudentRegistration";
+import StudentCurriculum from "./pages/student/StudentCurriculum";
+import StudentRegistrationManage from "./pages/student/StudentRegistrationManage";
+import StudentRegistrationHistory from "./pages/student/StudentRegistrationHistory";
 import StudentTimetable from "./pages/student/StudentTimetable";
 import StudentTranscript from "./pages/student/StudentTranscript";
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
@@ -32,10 +35,16 @@ const App = () => (
           <Route path="/" element={<Index />} />
 
           <Route path="/student" element={<StudentLayout />}>
-            <Route index element={<StudentDashboard />} />
-            <Route path="registration" element={<StudentRegistration />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="curriculum" element={<StudentCurriculum />} />
+            <Route path="registration/manage" element={<StudentRegistrationManage />} />
+            <Route path="registration/history" element={<StudentRegistrationHistory />} />
             <Route path="timetable" element={<StudentTimetable />} />
             <Route path="transcript" element={<StudentTranscript />} />
+          </Route>
+          <Route path="/registration" element={<StudentLayout />}>
+            <Route index element={<StudentRegistration />} />
           </Route>
 
           <Route path="/lecturer" element={<LecturerLayout />}>
