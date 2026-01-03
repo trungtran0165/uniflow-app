@@ -18,9 +18,6 @@ const StudentDashboard = () => {
           >
             Xin chào, {profile.name} 👋
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Theo dõi tiến độ CTĐT, nhắc việc quan trọng và lịch học trong ngày. Dữ liệu hiện tại là mock để minh họa.
-          </p>
         </div>
 
         <div className="glass-panel flex items-center gap-4 rounded-2xl px-4 py-3">
@@ -132,18 +129,46 @@ const StudentDashboard = () => {
               <button
                 type="button"
                 key={slot.id}
-                className={`schedule-slot ${slot.status === "ongoing" ? "schedule-slot--highlight" : ""}`}
+                className={`schedule-slot min-h-[72px] w-full ${slot.status === "ongoing" ? "schedule-slot--highlight" : ""}`}
               >
-                <div className="text-left">
-                  <p className="text-xs font-medium opacity-80">{slot.time}</p>
-                  <p className="mt-0.5 text-sm font-semibold">
-                    {slot.course} <span className="text-xs font-normal text-muted-foreground">({slot.code})</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">Phòng {slot.room}</p>
-                </div>
-                <div className="hidden items-center gap-1 text-xs font-medium sm:flex">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  <span>{slot.status === "ongoing" ? "Đang học" : "Sắp diễn ra"}</span>
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-left">
+                  <div className="min-w-0">
+                    <p
+                      className={`text-xs font-medium ${
+                        slot.status === "ongoing" ? "text-accent-foreground/90" : "text-muted-foreground"
+                      }`}
+                    >
+                      {slot.time}
+                    </p>
+                    <div className="mt-0.5 flex min-w-0 items-baseline gap-1">
+                      <p
+                        className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                          slot.status === "ongoing" ? "text-accent-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {slot.course}
+                      </p>
+                      <span
+                        className={`shrink-0 text-xs font-normal ${
+                          slot.status === "ongoing" ? "text-accent-foreground/80" : "text-muted-foreground"
+                        }`}
+                      >
+                        ({slot.code})
+                      </span>
+                    </div>
+                    <p
+                      className={`text-xs ${
+                        slot.status === "ongoing" ? "text-accent-foreground/85" : "text-muted-foreground"
+                      }`}
+                    >
+                      Phòng {slot.room}
+                    </p>
+                  </div>
+
+                  <div className="flex min-w-[96px] items-center justify-end gap-1 text-xs font-medium">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span>{slot.status === "ongoing" ? "Đang học" : "Sắp diễn ra"}</span>
+                  </div>
                 </div>
               </button>
             ))}
@@ -153,12 +178,12 @@ const StudentDashboard = () => {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="glass-panel interactive-card">
-          <CardHeader className="flex items-center justify-between space-y-0 pb-3">
-            <div>
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+            <div className="min-w-0">
               <CardTitle className="text-base">Thông báo mới</CardTitle>
               <p className="text-xs text-muted-foreground">Tổng hợp từ ĐKHP, lịch học và phòng đào tạo.</p>
             </div>
-            <Info className="h-4 w-4 text-primary" />
+            <Info className="mt-1 h-4 w-4 shrink-0 text-primary" />
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {announcements.map((item) => (
@@ -175,12 +200,12 @@ const StudentDashboard = () => {
         </Card>
 
         <Card className="glass-panel interactive-card">
-          <CardHeader className="flex items-center justify-between pb-3">
-            <div>
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+            <div className="min-w-0">
               <CardTitle className="text-base">Lối tắt quan trọng</CardTitle>
               <p className="text-xs text-muted-foreground">Đi tới các màn hình chính trong portal sinh viên.</p>
             </div>
-            <Link2 className="h-4 w-4 text-primary" />
+            <Link2 className="mt-1 h-4 w-4 shrink-0 text-primary" />
           </CardHeader>
           <CardContent className="space-y-2">
             {quickLinks.map((link) => (

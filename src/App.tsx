@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import StudentLayout from "./pages/student/StudentLayout";
 import LecturerLayout from "./pages/lecturer/LecturerLayout";
@@ -22,6 +22,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminPrograms from "./pages/admin/AdminPrograms";
 import AdminClasses from "./pages/admin/AdminClasses";
 import AdminRegistrationWindows from "./pages/admin/AdminRegistrationWindows";
+import AdminCurriculumEditor from "./pages/admin/AdminCurriculumEditor";
 
 const queryClient = new QueryClient();
 
@@ -32,7 +33,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
 
           <Route path="/student" element={<StudentLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -56,6 +58,7 @@ const App = () => (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="programs" element={<AdminPrograms />} />
+            <Route path="programs/curriculum-editor" element={<AdminCurriculumEditor />} />
             <Route path="classes" element={<AdminClasses />} />
             <Route path="registration-windows" element={<AdminRegistrationWindows />} />
           </Route>

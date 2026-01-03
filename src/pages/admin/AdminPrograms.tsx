@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpenCheck, Plus } from "lucide-react";
+import { BookOpenCheck, FilePenLine, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const programs = [
   { code: "7480201", name: "Công nghệ thông tin", version: "2023", majors: 3 },
@@ -19,9 +20,16 @@ const AdminPrograms = () => {
             Minh hoạ use case quản lý chương trình đào tạo, học phần và điều kiện tiên quyết.
           </p>
         </div>
-        <Button size="sm" className="flex items-center gap-2 text-xs md:text-sm">
-          <Plus className="h-4 w-4" /> Tạo CTĐT mới
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline" className="flex items-center gap-2 text-xs md:text-sm">
+            <Link to="/admin/programs/curriculum-editor">
+              <FilePenLine className="h-4 w-4" /> Nội dung CTĐT (HTML)
+            </Link>
+          </Button>
+          <Button size="sm" className="flex items-center gap-2 text-xs md:text-sm">
+            <Plus className="h-4 w-4" /> Tạo CTĐT mới
+          </Button>
+        </div>
       </div>
 
       <Card className="glass-panel interactive-card">

@@ -601,10 +601,10 @@ export const useMockStudentSummary = () => {
   return useMemo(
     () => ({
       profile: {
-        name: "Nguyễn Văn A",
-        code: "20520001",
+        name: "Trần Quốc Trung",
+        code: "22521569",
         cohort: "K2022",
-        major: "Khoa học máy tính",
+        major: "Công nghệ Thông tin",
       },
       stats: {
         currentTerm: "HK2 2025–2026",

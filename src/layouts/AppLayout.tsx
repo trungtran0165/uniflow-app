@@ -76,12 +76,18 @@ export const AppLayout = ({ role, children }: AppLayoutProps) => {
   const location = useLocation();
   const navItems = navByRole[role];
   const meta = roleMeta[role];
+  const homeByRole: Record<Role, string> = {
+    student: "/student/dashboard",
+    lecturer: "/lecturer",
+    admin: "/admin",
+  };
+  const home = homeByRole[role];
 
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" variant="sidebar">
         <SidebarHeader className="border-b border-sidebar-border pb-3">
-          <Link to="/" className="flex items-center gap-2 px-2">
+          <Link to={home} className="flex items-center gap-2 px-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
               <GraduationCap className="h-5 w-5" />
             </div>

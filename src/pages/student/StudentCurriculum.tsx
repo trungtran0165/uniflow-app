@@ -1,45 +1,63 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { curriculumSemesters, CurriculumCourse } from "@/mocks/student";
-import CourseStatusBadge from "@/components/student/CourseStatusBadge";
-import { BookOpenCheck, Search } from "lucide-react";
-
-const filterCourses = (courses: CurriculumCourse[], keyword: string, type: string) => {
-  const term = keyword.toLowerCase();
-  return courses.filter((course) => {
-    const matchesKeyword =
-      !term || course.name.toLowerCase().includes(term) || course.code.toLowerCase().includes(term);
-    const matchesType = type === "all" || course.type === type;
-    return matchesKeyword && matchesType;
-  });
-};
+import { BookOpenCheck, FileText, Layers3, GraduationCap } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import type { CurriculumSystem } from "@/data/curriculumPrograms";
+import {
+  findProgram,
+  listCohorts,
+  listMajors,
+  loadCurriculumPrograms,
+} from "@/lib/curriculumStore";
+import { Badge } from "@/components/ui/badge";
+import { CurriculumHtmlViewer } from "@/components/CurriculumHtmlViewer";
 
 const StudentCurriculum = () => {
-  const [activeSemester, setActiveSemester] = useState(curriculumSemesters[0]?.id ?? "");
-  const [keyword, setKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "Bắt buộc" | "Tự chọn">("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [programs] = useState(() => loadCurriculumPrograms());
 
-  const selectedSemester = useMemo(
-    () => curriculumSemesters.find((semester) => semester.id === activeSemester) ?? curriculumSemesters[0],
-    [activeSemester],
+  const systemParam = (searchParams.get("system") as CurriculumSystem | null) ?? null;
+  const cohortParam = searchParams.get("cohort");
+  const majorParam = searchParams.get("major");
+
+  const [system, setSystem] = useState<CurriculumSystem | "">(
+    systemParam === "chinh-quy" || systemParam === "tu-xa" ? systemParam : "",
+  );
+  const [cohort, setCohort] = useState<string>(cohortParam ?? "");
+  const [major, setMajor] = useState<string>(majorParam ?? "");
+
+  // keep internal state synced if user lands via deep-link
+  useEffect(() => {
+    if (systemParam && (systemParam === "chinh-quy" || systemParam === "tu-xa")) setSystem(systemParam);
+    if (cohortParam !== null) setCohort(cohortParam);
+    if (majorParam !== null) setMajor(majorParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [systemParam, cohortParam, majorParam]);
+
+  const cohorts = useMemo(() => listCohorts(programs, system || undefined), [programs, system]);
+  const majors = useMemo(() => listMajors(programs, system || undefined, cohort || undefined), [programs, system, cohort]);
+
+  const selectedProgram = useMemo(
+    () => findProgram(programs, system || undefined, cohort || undefined, major || undefined),
+    [programs, system, cohort, major],
   );
 
-  const filteredCourses = useMemo(
-    () => filterCourses(selectedSemester?.courses ?? [], keyword, typeFilter),
-    [selectedSemester?.courses, keyword, typeFilter],
-  );
+  const selectedHtml = selectedProgram?.html ?? "";
 
-  const totals = useMemo(() => {
-    const courses = selectedSemester?.courses ?? [];
-    return {
-      completed: courses.filter((course) => course.status === "completed").length,
-      inProgress: courses.filter((course) => course.status === "in-progress").length,
-      pending: courses.filter((course) => course.status === "pending").length,
-    };
-  }, [selectedSemester?.courses]);
+  const updateParams = (next: { system?: string; cohort?: string; major?: string }) => {
+    const params = new URLSearchParams(searchParams);
+    if (next.system !== undefined) {
+      next.system ? params.set("system", next.system) : params.delete("system");
+    }
+    if (next.cohort !== undefined) {
+      next.cohort ? params.set("cohort", next.cohort) : params.delete("cohort");
+    }
+    if (next.major !== undefined) {
+      next.major ? params.set("major", next.major) : params.delete("major");
+    }
+    setSearchParams(params, { replace: true });
+  };
 
   return (
     <section aria-labelledby="student-curriculum-heading" className="space-y-6">
@@ -49,128 +67,132 @@ const StudentCurriculum = () => {
             Tra cứu Chương trình đào tạo
           </h1>
           <p className="text-sm text-muted-foreground">
-            Danh sách học phần được nhóm theo học kỳ đề xuất, có trạng thái Đã học/Đang học/Chưa học.
+            Chọn hệ đào tạo, khóa CTĐT và ngành để xem nội dung CTĐT. Nội dung được Phòng đào tạo cấu hình.
           </p>
         </div>
-        <div className="pill-badge flex items-center gap-2">
-          <BookOpenCheck className="h-3.5 w-3.5" />
-          Khoa Công nghệ thông tin · Khóa 2022
-        </div>
+        {selectedProgram ? (
+          <div className="pill-badge flex items-center gap-2">
+            <BookOpenCheck className="h-3.5 w-3.5" />
+            {selectedProgram.majorLabel} · Khóa {selectedProgram.cohort}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2.3fr)_minmax(0,1.2fr)]">
-        <Card className="glass-panel interactive-card">
-          <CardHeader className="space-y-3 pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Lộ trình học phần</CardTitle>
-              <p className="text-xs text-muted-foreground">Click từng học kỳ để xem chi tiết.</p>
-            </div>
-            <Tabs value={activeSemester} onValueChange={setActiveSemester}>
-              <TabsList className="flex flex-wrap gap-2 bg-transparent">
-                {curriculumSemesters.map((semester) => (
-                  <TabsTrigger key={semester.id} value={semester.id} className="rounded-full bg-muted px-3 text-xs">
-                    {semester.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {curriculumSemesters.map((semester) => (
-                <TabsContent key={semester.id} value={semester.id} className="space-y-3 pt-3">
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
-                    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
-                      <Search className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={keyword}
-                        onChange={(event) => setKeyword(event.target.value)}
-                        placeholder="Tìm mã môn / tên môn"
-                        className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-                      />
-                    </div>
-
-                    <Select value={typeFilter} onValueChange={(value: typeof typeFilter) => setTypeFilter(value)}>
-                      <SelectTrigger className="h-10 text-sm">
-                        <SelectValue placeholder="Loại học phần" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tất cả loại</SelectItem>
-                        <SelectItem value="Bắt buộc">Bắt buộc</SelectItem>
-                        <SelectItem value="Tự chọn">Tự chọn</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    {filteredCourses.length === 0 ? (
-                      <div className="rounded-xl border border-dashed bg-muted/40 p-6 text-center text-sm text-muted-foreground">
-                        Không tìm thấy học phần phù hợp với tiêu chí lọc. Vui lòng thử lại.
-                      </div>
-                    ) : (
-                      filteredCourses.map((course) => (
-                        <div key={course.code} className="rounded-xl border bg-card/80 p-4">
-                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">{course.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {course.code} • {course.credits} tín chỉ • {course.type}
-                              </p>
-                            </div>
-                            <CourseStatusBadge status={course.status} />
-                          </div>
-                          {course.prerequisites?.length ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Tiên quyết: {course.prerequisites.join(", ")}
-                            </p>
-                          ) : null}
-                          {course.description ? (
-                            <p className="mt-1 text-xs text-muted-foreground">{course.description}</p>
-                          ) : null}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </TabsContent>
-              ))}
-            </Tabs>
-          </CardHeader>
-        </Card>
-
-        <Card className="glass-panel interactive-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Tổng quan học kỳ</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="rounded-xl bg-secondary/50 p-4">
-              <p className="stat-label">Ghi chú học kỳ</p>
-              <p className="text-sm text-foreground">{selectedSemester?.note ?? "Tiếp tục tích lũy tín chỉ chuyên ngành."}</p>
-            </div>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-lg border bg-card/70 p-3">
-                <p className="stat-label">Đã học</p>
-                <p className="stat-value text-xl">{totals.completed}</p>
-              </div>
-              <div className="rounded-lg border bg-card/70 p-3">
-                <p className="stat-label">Đang học</p>
-                <p className="stat-value text-xl">{totals.inProgress}</p>
-              </div>
-              <div className="rounded-lg border bg-card/70 p-3">
-                <p className="stat-label">Chưa học</p>
-                <p className="stat-value text-xl">{totals.pending}</p>
-              </div>
+      <Card className="glass-panel interactive-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Bộ lọc CTĐT</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="stat-label">Step 1 · Hệ đào tạo</p>
+              <Select
+                value={system}
+                onValueChange={(value: CurriculumSystem) => {
+                  setSystem(value);
+                  setCohort("");
+                  setMajor("");
+                  updateParams({ system: value, cohort: "", major: "" });
+                }}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Chọn hệ đào tạo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="chinh-quy">Hệ chính quy</SelectItem>
+                  <SelectItem value="tu-xa">Hệ từ xa</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <p className="font-semibold text-foreground">Chú giải trạng thái</p>
-              <div className="flex flex-wrap gap-2">
-                <CourseStatusBadge status="completed" />
-                <CourseStatusBadge status="in-progress" />
-                <CourseStatusBadge status="pending" />
-              </div>
-              <p className="text-muted-foreground">
-                Các trạng thái được tính dựa trên lịch sử học tập và các lớp đã đăng ký trong kỳ hiện tại.
-              </p>
+            <div className="space-y-2">
+              <p className="stat-label">Step 2 · Khóa CTĐT</p>
+              <Select
+                value={cohort}
+                onValueChange={(value) => {
+                  setCohort(value);
+                  setMajor("");
+                  updateParams({ cohort: value, major: "" });
+                }}
+                disabled={!system}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder={system ? "Chọn khóa CTĐT" : "Chọn Step 1 trước"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {cohorts.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      CTĐT Khóa {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+
+            <div className="space-y-2">
+              <p className="stat-label">Step 3 · Ngành</p>
+              <Select
+                value={major}
+                onValueChange={(value) => {
+                  setMajor(value);
+                  updateParams({ major: value });
+                }}
+                disabled={!system || !cohort}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder={system && cohort ? "Chọn ngành" : "Chọn Step 1–2 trước"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {majors.map((m) => (
+                    <SelectItem key={m.major} value={m.major}>
+                      {m.majorLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">Gợi ý</p>
+            <p>Link trang sẽ tự cập nhật theo lựa chọn để bạn copy/share cho bạn bè.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel interactive-card">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <div className="min-w-0">
+            <CardTitle className="text-base">Nội dung CTĐT</CardTitle>
+            <p className="text-xs text-muted-foreground">Step 4 · Hiển thị nội dung theo cấu hình của Phòng đào tạo.</p>
+          </div>
+          <Badge variant="outline" className="gap-2 text-xs">
+            <FileText className="h-3.5 w-3.5" />
+            HTML
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!system || !cohort || !major ? (
+            <div className="rounded-xl border border-dashed bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Layers3 className="h-5 w-5" />
+              </div>
+              <p className="font-semibold text-foreground">Chọn đủ 3 bước để xem CTĐT</p>
+              <p className="mt-1 text-xs">Bắt đầu từ hệ đào tạo → khóa → ngành.</p>
+            </div>
+          ) : !selectedProgram ? (
+            <div className="rounded-xl border border-dashed bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <GraduationCap className="h-5 w-5" />
+              </div>
+              <p className="font-semibold text-foreground">Chưa có nội dung CTĐT cho lựa chọn này</p>
+              <p className="mt-1 text-xs">PĐT sẽ cập nhật nội dung trong thời gian tới.</p>
+            </div>
+          ) : (
+            <CurriculumHtmlViewer html={selectedHtml} />
+          )}
+        </CardContent>
+      </Card>
     </section>
   );
 };

@@ -1,9 +1,10 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Hệ thiết kế UniReg – tất cả màu sắc dùng HSL, sử dụng lại qua token. */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 
 @layer base {
   :root {
@@ -154,11 +155,61 @@
     @apply flex cursor-pointer items-center justify-between rounded-lg border border-transparent bg-secondary px-3 py-2 text-sm transition-colors;
   }
 
-  .schedule-slot:hover {
+  .schedule-slot:not(.schedule-slot--highlight):hover {
     @apply border-primary bg-primary/5;
   }
 
   .schedule-slot--highlight {
-    @apply bg-accent text-accent-foreground;
+    @apply border-accent bg-accent text-accent-foreground;
+  }
+
+  .schedule-slot--highlight:hover {
+    @apply border-accent bg-accent text-accent-foreground;
+  }
+
+  /* CTĐT HTML viewer: ensure Quill output (ql-size-*) looks correct in preview */
+  .ctdt-html .ql-size-small {
+    font-size: 0.875em;
+  }
+
+  .ctdt-html .ql-size-large {
+    font-size: 1.25em;
+  }
+
+  .ctdt-html .ql-size-huge {
+    font-size: 1.6em;
+    font-weight: 700;
+  }
+
+  /* Quill (bubble) viewer tweaks for CTĐT preview/student */
+  .ctdt-viewer .ql-container {
+    font-family: inherit;
+  }
+
+  .ctdt-viewer .ql-editor {
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .ctdt-viewer .ql-editor h1 {
+    font-size: 2.25rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0.2em 0 0.4em;
+  }
+
+  .ctdt-viewer .ql-editor h2 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+    font-weight: 700;
+    margin: 0.7em 0 0.35em;
+  }
+
+  .ctdt-viewer .ql-editor h3 {
+    font-size: 1.25rem;
+    line-height: 1.35;
+    font-weight: 700;
+    margin: 0.8em 0 0.35em;
   }
 }
