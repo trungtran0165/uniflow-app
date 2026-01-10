@@ -39,9 +39,6 @@ Backend sẽ chạy tại: http://localhost:3000
 
 ## MongoDB
 
-MongoDB connection string đã được cấu hình trong `backend/.env`:
-- Database: DAHK
-- Connection: mongodb+srv://namtrieu007:KTGaming@cluster0.i2usc.mongodb.net/DAHK
 
 ## Công nghệ sử dụng
 
