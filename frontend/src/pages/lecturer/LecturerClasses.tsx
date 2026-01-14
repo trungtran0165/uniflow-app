@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lecturersAPI, authAPI } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const LecturerClasses = () => {
   const navigate = useNavigate();
@@ -56,11 +57,7 @@ const LecturerClasses = () => {
   };
 
   if (isLoading || !lecturerId) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách lớp phụ trách" />;
   }
 
   return (

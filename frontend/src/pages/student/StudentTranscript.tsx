@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { studentsAPI, authAPI } from "@/lib/api";
 import { useState, useEffect } from "react";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const StudentTranscript = () => {
   const { toast } = useToast();
@@ -91,11 +92,7 @@ const StudentTranscript = () => {
   };
 
   if (isLoading || !studentId) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy bảng điểm" />;
   }
 
   const transcriptSummary = summaryData || {

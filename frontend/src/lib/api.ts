@@ -77,6 +77,15 @@ export const adminClassesAPI = {
       method: 'DELETE',
     }),
   getStudents: (classId: string) => apiRequest(`/admin/classes/${classId}/students`),
+  addStudent: (classId: string, data: any) =>
+    apiRequest(`/admin/classes/${classId}/students`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  removeStudent: (classId: string, enrollmentId: string) =>
+    apiRequest(`/admin/classes/${classId}/students/${enrollmentId}`, {
+      method: "DELETE",
+    }),
 };
 
 // Admin - Programs API
@@ -103,6 +112,22 @@ export const adminProgramsAPI = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // ProgramCourse mapping (new curriculum model)
+  getCurriculum: (programId: string) => apiRequest(`/admin/programs/${programId}/curriculum`),
+  addToCurriculum: (programId: string, data: any) =>
+    apiRequest(`/admin/programs/${programId}/curriculum`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateProgramCourse: (programId: string, programCourseId: string, data: any) =>
+    apiRequest(`/admin/programs/${programId}/curriculum/${programCourseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  removeFromCurriculum: (programId: string, programCourseId: string) =>
+    apiRequest(`/admin/programs/${programId}/curriculum/${programCourseId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Admin - Registration Windows API
@@ -127,6 +152,32 @@ export const adminRegistrationWindowsAPI = {
   delete: (windowId: string) =>
     apiRequest(`/admin/registration-windows/${windowId}`, {
       method: 'DELETE',
+    }),
+};
+
+// Admin - Courses API (global course catalog)
+export const adminCoursesAPI = {
+  getAll: (filters?: { programId?: string; unassigned?: boolean; keyword?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.programId) params.append("programId", filters.programId);
+    if (filters?.unassigned) params.append("unassigned", "true");
+    if (filters?.keyword) params.append("keyword", filters.keyword);
+    const query = params.toString();
+    return apiRequest(`/admin/courses${query ? `?${query}` : ""}`);
+  },
+  create: (data: any) =>
+    apiRequest("/admin/courses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (courseId: string, data: any) =>
+    apiRequest(`/admin/courses/${courseId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (courseId: string) =>
+    apiRequest(`/admin/courses/${courseId}`, {
+      method: "DELETE",
     }),
 };
 

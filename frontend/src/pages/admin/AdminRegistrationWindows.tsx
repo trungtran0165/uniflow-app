@@ -12,10 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, Filter, Plus } from "lucide-react";
-import { adminRegistrationWindowsAPI, adminSemestersAPI } from "@/lib/api";
+import { adminRegistrationWindowsAPI, adminSemestersAPI, adminClassesAPI } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ContentLoader from "@/components/common/ContentLoader";
 
 interface RegistrationWindow {
   _id: string;
@@ -25,6 +27,7 @@ interface RegistrationWindow {
     name: string;
     code: string;
   };
+  classIds?: string[];
   startDate: string;
   endDate: string;
   minCredits: number;
@@ -46,6 +49,10 @@ const AdminRegistrationWindows = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingWindow, setEditingWindow] = useState<RegistrationWindow | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isClassesDialogOpen, setIsClassesDialogOpen] = useState(false);
+  const [classesWindow, setClassesWindow] = useState<RegistrationWindow | null>(null);
+  const [classSearch, setClassSearch] = useState("");
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     semesterId: "",
@@ -139,6 +146,32 @@ const AdminRegistrationWindows = () => {
     },
   });
 
+  const updateWindowClassesMutation = useMutation({
+    mutationFn: ({ windowId, classIds }: { windowId: string; classIds: string[] }) =>
+      adminRegistrationWindowsAPI.update(windowId, { classIds }),
+    onSuccess: () => {
+      toast({ title: "Thành công", description: "Đã cập nhật danh sách lớp mở trong đợt" });
+      queryClient.invalidateQueries({ queryKey: ["admin-registration-windows"] });
+      setIsClassesDialogOpen(false);
+      setClassesWindow(null);
+      setSelectedClassIds([]);
+      setClassSearch("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể cập nhật danh sách lớp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: semesterClasses = [], isLoading: isLoadingSemesterClasses } = useQuery({
+    queryKey: ["admin-window-classes", classesWindow?.semesterId?._id],
+    queryFn: () => adminClassesAPI.getAll(classesWindow!.semesterId._id),
+    enabled: !!classesWindow && isClassesDialogOpen,
+  });
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -175,6 +208,7 @@ const AdminRegistrationWindows = () => {
       endDate: formData.endDate,
       minCredits: formData.minCredits,
       maxCredits: formData.maxCredits,
+      classIds: [],
       targetCohorts: formData.targetCohorts,
       targetMajors: formData.targetMajors,
       rules: formData.rules,
@@ -220,6 +254,20 @@ const AdminRegistrationWindows = () => {
     updateStatusMutation.mutate({ windowId, status: newStatus });
   };
 
+  const handleConfigureClasses = (window: RegistrationWindow) => {
+    setClassesWindow(window);
+    setSelectedClassIds(window.classIds || []);
+    setClassSearch("");
+    setIsClassesDialogOpen(true);
+  };
+
+  const toggleClassId = (classId: string, checked: boolean) => {
+    setSelectedClassIds((prev) => {
+      if (checked) return prev.includes(classId) ? prev : [...prev, classId];
+      return prev.filter((id) => id !== classId);
+    });
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const day = String(date.getDate()).padStart(2, '0');
@@ -252,7 +300,7 @@ const AdminRegistrationWindows = () => {
       </div>
 
       {isLoading ? (
-        <p className="text-muted-foreground">Đang tải...</p>
+        <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách đợt ĐKHP" />
       ) : windows.length === 0 ? (
         <Card className="glass-panel interactive-card">
           <CardContent className="py-8 text-center text-muted-foreground">
@@ -354,6 +402,13 @@ const AdminRegistrationWindows = () => {
                     >
                       Sửa
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleConfigureClasses(window)}
+                    >
+                      Chọn lớp mở
+                    </Button>
                     {window.status === 'draft' && (
                       <Button
                         size="sm"
@@ -361,6 +416,15 @@ const AdminRegistrationWindows = () => {
                         onClick={() => handleUpdateStatus(window._id, 'open')}
                       >
                         Mở đợt
+                      </Button>
+                    )}
+                    {window.status === 'closed' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUpdateStatus(window._id, 'open')}
+                      >
+                        Mở lại
                       </Button>
                     )}
                     {window.status === 'open' && (
@@ -701,6 +765,129 @@ const AdminRegistrationWindows = () => {
             </Button>
             <Button onClick={handleUpdateWindow} disabled={updateWindowMutation.isPending}>
               {updateWindowMutation.isPending ? "Đang cập nhật..." : "Lưu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Configure Classes Dialog */}
+      <Dialog
+        open={isClassesDialogOpen}
+        onOpenChange={(open) => {
+          setIsClassesDialogOpen(open);
+          if (!open) {
+            setClassesWindow(null);
+            setSelectedClassIds([]);
+            setClassSearch("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chọn lớp sẽ mở trong đợt</DialogTitle>
+            <DialogDescription>
+              Đợt: <span className="font-semibold">{classesWindow?.name}</span> • Học kỳ:{" "}
+              <span className="font-semibold">{classesWindow?.semesterId?.name}</span>
+              <br />
+              Nếu bạn chọn ít nhất 1 lớp, sinh viên chỉ thấy các lớp này (khi lớp ở trạng thái <span className="font-semibold">open</span>).
+              Nếu không chọn lớp nào, hệ thống sẽ áp dụng theo toàn bộ lớp <span className="font-semibold">open</span> trong học kỳ.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            <Label>Tìm lớp</Label>
+            <Input
+              value={classSearch}
+              onChange={(e) => setClassSearch(e.target.value)}
+              placeholder="Tìm theo mã lớp / mã môn / tên môn"
+            />
+            <p className="text-xs text-muted-foreground">
+              Đã chọn: <span className="font-semibold">{selectedClassIds.length}</span> lớp
+            </p>
+          </div>
+
+          <Card className="glass-panel interactive-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Danh sách lớp (theo học kỳ)</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Mẹo: Lớp chưa có lịch học vẫn có thể chọn để “lên kế hoạch”, nhưng sẽ chưa tự mở cho sinh viên cho đến khi có lịch và được mở lớp.
+              </p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto text-sm">
+              {isLoadingSemesterClasses ? (
+                <ContentLoader size="card" title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách lớp học phần" />
+              ) : (semesterClasses as any[]).length === 0 ? (
+                <p className="text-sm text-muted-foreground">Không có lớp nào trong học kỳ này</p>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="border-b text-xs text-muted-foreground">
+                    <tr>
+                      <th className="py-2 pr-3 text-left font-medium">Chọn</th>
+                      <th className="py-2 pr-3 text-left font-medium">Mã lớp</th>
+                      <th className="py-2 pr-3 text-left font-medium">Học phần</th>
+                      <th className="py-2 pr-3 text-left font-medium">Trạng thái</th>
+                      <th className="py-2 text-left font-medium">Ghi chú</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(semesterClasses as any[])
+                      .filter((cls: any) => {
+                        const q = classSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        const code = (cls.code || "").toLowerCase();
+                        const courseCode = (cls.courseId?.code || "").toLowerCase();
+                        const courseName = (cls.courseId?.name || "").toLowerCase();
+                        return code.includes(q) || courseCode.includes(q) || courseName.includes(q);
+                      })
+                      .map((cls: any) => {
+                        const checked = selectedClassIds.includes(cls._id);
+                        const hasSchedule = (cls.schedule?.length ?? 0) > 0;
+                        return (
+                          <tr key={cls._id} className="border-b last:border-b-0">
+                            <td className="py-2 pr-3">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => toggleClassId(cls._id, Boolean(v))}
+                                aria-label={`Chọn lớp ${cls.code}`}
+                              />
+                            </td>
+                            <td className="py-2 pr-3 font-medium">{cls.code}</td>
+                            <td className="py-2 pr-3">
+                              <div className="space-y-0.5">
+                                <p className="font-medium">{cls.courseId?.name || "N/A"}</p>
+                                <p className="text-xs text-muted-foreground">{cls.courseId?.code || ""}</p>
+                              </div>
+                            </td>
+                            <td className="py-2 pr-3 text-xs text-muted-foreground">{cls.status || "draft"}</td>
+                            <td className="py-2 text-xs text-muted-foreground">
+                              {!hasSchedule ? "Chưa có lịch học" : ""}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsClassesDialogOpen(false);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              onClick={() => {
+                if (!classesWindow) return;
+                updateWindowClassesMutation.mutate({ windowId: classesWindow._id, classIds: selectedClassIds });
+              }}
+              disabled={!classesWindow || updateWindowClassesMutation.isPending}
+            >
+              {updateWindowClassesMutation.isPending ? "Đang lưu..." : "Lưu danh sách lớp"}
             </Button>
           </DialogFooter>
         </DialogContent>

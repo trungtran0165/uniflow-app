@@ -19,6 +19,7 @@ const createSemesterSchema = z.object({
   type: z.enum(['HK1', 'HK2', 'HKHe']),
   startDate: z.union([z.string().datetime(), z.string()]),
   endDate: z.union([z.string().datetime(), z.string()]),
+  isActive: z.boolean().optional(),
 });
 
 const updateSemesterSchema = createSemesterSchema.partial();

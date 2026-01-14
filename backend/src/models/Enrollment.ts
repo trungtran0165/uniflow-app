@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IEnrollment extends Document {
   studentId: mongoose.Types.ObjectId;
   classId: mongoose.Types.ObjectId;
-  registrationWindowId: mongoose.Types.ObjectId;
+  registrationWindowId?: mongoose.Types.ObjectId; // optional for admin-managed enrollments
   status: 'registered' | 'waitlist' | 'cancelled' | 'dropped';
   waitlistPosition: number; // Vị trí trong waitlist (nếu có)
   enrolledAt: Date;
@@ -32,7 +32,7 @@ const EnrollmentSchema: Schema = new Schema(
     registrationWindowId: {
       type: Schema.Types.ObjectId,
       ref: 'RegistrationWindow',
-      required: true,
+      required: false,
     },
     status: {
       type: String,

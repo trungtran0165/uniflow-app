@@ -41,7 +41,7 @@ const SemesterSchema: Schema = new Schema(
     },
     isActive: {
       type: Boolean,
-      default: true,
+      default: false,
     },
   },
   {

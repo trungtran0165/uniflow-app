@@ -80,8 +80,10 @@ const navByRole: Record<Role, NavItem[]> = {
   admin: [
     { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
     { label: "CTĐT & Học phần", to: "/admin/programs", icon: School },
+    { label: "Quản lý học phần", to: "/admin/courses", icon: BookOpen },
+    { label: "Quản lý học kỳ", to: "/admin/semesters", icon: CalendarDays },
     { label: "Kỳ học & Lớp học phần", to: "/admin/classes", icon: Users },
-    { label: "Đợt ĐKHP", to: "/admin/registration-windows", icon: CalendarDays },
+    { label: "Đợt ĐKHP", to: "/admin/registration-windows", icon: ListChecks },
   ],
 };
 
@@ -239,37 +241,21 @@ type RoleSwitcherProps = {
   currentRole: Role;
 };
 
+const roleShortLabel: Record<Role, string> = {
+  student: "SV",
+  lecturer: "GV",
+  admin: "PĐT",
+};
+
+// Strict: users cannot switch to other roles from UI.
 const RoleSwitcher = ({ currentRole }: RoleSwitcherProps) => {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-secondary px-1 py-1 text-xs">
-      <RoleChip to="/student" active={currentRole === "student"}>
-        SV
-      </RoleChip>
-      <RoleChip to="/lecturer" active={currentRole === "lecturer"}>
-        GV
-      </RoleChip>
-      <RoleChip to="/admin" active={currentRole === "admin"}>
-        PĐT
-      </RoleChip>
+    <div className="flex items-center gap-2 rounded-full bg-secondary px-2 py-1 text-xs">
+      <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium shadow-sm">
+        {roleShortLabel[currentRole]}
+      </span>
     </div>
   );
 };
-
-interface RoleChipProps {
-  to: string;
-  active?: boolean;
-  children: ReactNode;
-}
-
-const RoleChip = ({ to, active, children }: RoleChipProps) => (
-  <Button
-    asChild
-    size="sm"
-    variant={active ? "default" : "ghost"}
-    className={`h-7 rounded-full px-3 text-[11px] ${active ? "shadow-sm" : ""}`}
-  >
-    <NavLink to={to}>{children}</NavLink>
-  </Button>
-);
 
 export default AppLayout;

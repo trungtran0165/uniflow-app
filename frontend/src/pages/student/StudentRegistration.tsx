@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { registrationAPI, authAPI } from "@/lib/api";
 import { useEffect } from "react";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const StudentRegistration = () => {
   const { toast } = useToast();
@@ -134,11 +135,7 @@ const StudentRegistration = () => {
   };
 
   if (isLoading) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách lớp đang mở" />;
   }
 
   return (
@@ -205,7 +202,13 @@ const StudentRegistration = () => {
 
           <CardContent className="overflow-x-auto">
             {filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Không có lớp nào</p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Không có lớp nào</p>
+                <p className="text-xs text-muted-foreground">
+                  Nếu bạn chắc chắn đợt ĐKHP đang mở, hãy kiểm tra: lớp học phần đã được <span className="font-medium">mở lớp</span>{" "}
+                  (status <span className="font-medium">open</span>) và thuộc đúng <span className="font-medium">học kỳ</span> của đợt.
+                </p>
+              </div>
             ) : (
               <table className="min-w-full text-xs md:text-sm">
                 <thead className="border-b text-xs text-muted-foreground">

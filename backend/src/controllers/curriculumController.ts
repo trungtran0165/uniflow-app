@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Program from '../models/Program.js';
 import Course from '../models/Course.js';
+import ProgramCourse from '../models/ProgramCourse.js';
 
 /**
  * Get all programs with optional filters
@@ -80,10 +81,18 @@ export const getProgramCourses = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const courses = await Course.find({
-      programId: program._id,
-      isActive: true,
-    }).sort({ semester: 1, code: 1 });
+    // Use ProgramCourse mapping (supports core/required/elective and cross-program electives)
+    const mappings = await ProgramCourse.find({ programId: program._id, isActive: true })
+      .populate({
+        path: 'courseId',
+        match: { isActive: true },
+      })
+      .sort({ recommendedSemester: 1, createdAt: 1 });
+
+    // Flatten to Course[] for backward compatibility
+    const courses = mappings
+      .map((m: any) => m.courseId)
+      .filter(Boolean);
 
     res.json({
       success: true,
@@ -113,14 +122,20 @@ export const getProgramPrerequisites = async (req: Request, res: Response): Prom
       return;
     }
 
-    const courses = await Course.find({
-      programId: program._id,
-      isActive: true,
-    }).populate('prerequisites', 'code name');
+    const mappings = await ProgramCourse.find({ programId: program._id, isActive: true })
+      .populate({
+        path: 'courseId',
+        match: { isActive: true },
+        populate: { path: 'prerequisites', select: 'code name' },
+      });
+
+    const courses = mappings
+      .map((m: any) => m.courseId)
+      .filter(Boolean) as any[];
 
     // Format prerequisites data
     const prerequisitesData = courses
-      .filter((course) => course.prerequisites.length > 0)
+      .filter((course) => course.prerequisites && course.prerequisites.length > 0)
       .map((course) => ({
         course: {
           id: course._id,

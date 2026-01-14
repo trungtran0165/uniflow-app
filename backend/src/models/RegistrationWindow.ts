@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IRegistrationWindow extends Document {
   name: string; // Tên đợt (ĐKHP HK2 2025-2026)
   semesterId: mongoose.Types.ObjectId;
+  classIds?: mongoose.Types.ObjectId[]; // (Optional) danh sách lớp được mở trong đợt. Nếu rỗng/không có => mở theo toàn bộ lớp open của học kỳ.
   startDate: Date;
   endDate: Date;
   minCredits: number; // Tín chỉ tối thiểu
@@ -31,6 +32,12 @@ const RegistrationWindowSchema: Schema = new Schema(
       ref: 'Semester',
       required: true,
     },
+    classIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Class',
+      },
+    ],
     startDate: {
       type: Date,
       required: true,

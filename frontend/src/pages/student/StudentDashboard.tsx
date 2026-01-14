@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { studentsAPI, authAPI } from "@/lib/api";
 import { useState, useEffect } from "react";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const StudentDashboard = () => {
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -34,11 +35,7 @@ const StudentDashboard = () => {
   });
 
   if (isLoading || !studentId) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy dashboard sinh viên" />;
   }
 
   const profile = dashboardData?.profile || {

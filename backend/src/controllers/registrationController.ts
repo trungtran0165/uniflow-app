@@ -4,6 +4,7 @@ import Enrollment from '../models/Enrollment.js';
 import RegistrationWindow from '../models/RegistrationWindow.js';
 import Student from '../models/Student.js';
 import Course from '../models/Course.js';
+import ProgramCourse from '../models/ProgramCourse.js';
 import Grade from '../models/Grade.js';
 import AuditLog from '../models/AuditLog.js';
 import mongoose from 'mongoose';
@@ -52,11 +53,16 @@ export const getOpenClasses = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Get open classes for the semester
-    const classes = await Class.find({
-      semesterId: activeWindow.semesterId,
-      status: 'open',
-    })
+    // If window has an explicit class list, only show those (that are open)
+    // NOTE: When classIds is configured, we intentionally do NOT enforce semesterId
+    // to avoid “wrong semester selected” causing students to see nothing.
+    const hasExplicitList = Array.isArray((activeWindow as any).classIds) && (activeWindow as any).classIds.length > 0;
+    const classFilter: any = hasExplicitList
+      ? { _id: { $in: (activeWindow as any).classIds }, status: 'open' }
+      : { semesterId: activeWindow.semesterId, status: 'open' };
+
+    // Get open classes for the semester/window
+    const classes = await Class.find(classFilter)
       .populate('courseId', 'code name credits')
       .populate('lecturerId', 'name email')
       .populate('schedule.roomId', 'code name');
@@ -110,10 +116,10 @@ export const searchOpenClasses = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    let query: any = {
-      semesterId: activeWindow.semesterId,
-      status: 'open',
-    };
+    const hasExplicitList = Array.isArray((activeWindow as any).classIds) && (activeWindow as any).classIds.length > 0;
+    let query: any = hasExplicitList
+      ? { _id: { $in: (activeWindow as any).classIds }, status: 'open' }
+      : { semesterId: activeWindow.semesterId, status: 'open' };
 
     // Build search query
     if (keyword) {
@@ -269,6 +275,26 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Validation 0: Course must be allowed for student's program (core/required/elective)
+    // (skip if forced by admin)
+    if (!isForcedEnrollment) {
+      const courseId = (classDoc.courseId as any)._id || classDoc.courseId;
+      const allowed = await ProgramCourse.findOne({
+        programId: student.programId,
+        courseId,
+        isActive: true,
+      }).session(session);
+
+      if (!allowed) {
+        await session.abortTransaction();
+        res.status(403).json({
+          success: false,
+          error: 'Course not allowed for this student program (not in curriculum/electives list)',
+        });
+        return;
+      }
+    }
+
     // Check if already enrolled (within transaction)
     const existingEnrollment = await Enrollment.findOne({
       studentId: student._id,
@@ -285,10 +311,10 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // isForcedEnrollment already defined above
+    // isForcedEnrollment already defined above (used for bypassing validations)
 
     // Check seat availability (before atomic update)
-    const isFull = classDoc.enrolled >= classDoc.capacity;
+    // const isFull = classDoc.enrolled >= classDoc.capacity; // (unused; kept in atomic update below)
 
     // Validation 1: Check prerequisites with circular dependency detection (skip if forced)
     if (activeWindow.rules.checkPrerequisites && !isForcedEnrollment) {

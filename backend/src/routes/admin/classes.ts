@@ -3,7 +3,7 @@ import * as classController from '../../controllers/admin/classController.js';
 import { authenticate } from '../../middleware/auth.js';
 import { authorize } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/validate.js';
-import { classIdSchema, createClassSchema, updateClassSchema } from '../../utils/validation.js';
+import { classIdSchema, createClassSchema, enrollmentIdSchema, updateClassSchema } from '../../utils/validation.js';
 
 const router = Router();
 
@@ -46,5 +46,22 @@ router.delete('/:classId', validate(classIdSchema, 'params'), classController.de
  * Get students in a class
  */
 router.get('/:classId/students', validate(classIdSchema, 'params'), classController.getClassStudents);
+
+/**
+ * POST /api/admin/classes/:classId/students
+ * Add student into class (admin)
+ */
+router.post('/:classId/students', validate(classIdSchema, 'params'), classController.addStudentToClass);
+
+/**
+ * DELETE /api/admin/classes/:classId/students/:enrollmentId
+ * Remove student from class (cancel enrollment)
+ */
+router.delete(
+  '/:classId/students/:enrollmentId',
+  validate(classIdSchema, 'params'),
+  validate(enrollmentIdSchema, 'params'),
+  classController.removeStudentFromClass
+);
 
 export default router;

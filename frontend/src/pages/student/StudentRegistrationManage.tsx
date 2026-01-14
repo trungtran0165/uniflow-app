@@ -18,6 +18,7 @@ import { History, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { registrationAPI, authAPI } from "@/lib/api";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const StudentRegistrationManage = () => {
   const { toast } = useToast();
@@ -101,11 +102,7 @@ const StudentRegistrationManage = () => {
   };
 
   if (isLoading || !studentId) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy đăng ký hiện tại của bạn" />;
   }
 
   return (

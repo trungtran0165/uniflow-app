@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import TimetableCell from "@/components/student/TimetableCell";
 import { useQuery } from "@tanstack/react-query";
 import { studentsAPI, authAPI } from "@/lib/api";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const StudentTimetable = () => {
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -81,11 +82,7 @@ const StudentTimetable = () => {
   };
 
   if (isLoading || !studentId) {
-    return (
-      <section className="space-y-6">
-        <p className="text-muted-foreground">Đang tải...</p>
-      </section>
-    );
+    return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy thời khóa biểu" />;
   }
 
   return (

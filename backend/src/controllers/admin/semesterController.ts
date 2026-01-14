@@ -25,7 +25,7 @@ export const getSemesters = async (req: Request, res: Response): Promise<void> =
  */
 export const createSemester = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, code, academicYear, type, startDate, endDate } = req.body;
+    const { name, code, academicYear, type, startDate, endDate, isActive } = req.body;
 
     // Check if code already exists
     const existing = await Semester.findOne({ code });
@@ -37,6 +37,8 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const nextIsActive = typeof isActive === 'boolean' ? isActive : true;
+
     const semester = new Semester({
       name,
       code,
@@ -44,9 +46,15 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
       type,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
+      isActive: nextIsActive,
     });
 
     await semester.save();
+
+    // Ensure only one active semester
+    if (semester.isActive) {
+      await Semester.updateMany({ _id: { $ne: semester._id } }, { $set: { isActive: false } });
+    }
 
     res.status(201).json({
       success: true,
@@ -117,6 +125,11 @@ export const updateSemester = async (req: Request, res: Response): Promise<void>
         error: 'Semester not found',
       });
       return;
+    }
+
+    // Ensure only one active semester
+    if (updateData.isActive === true) {
+      await Semester.updateMany({ _id: { $ne: semester._id } }, { $set: { isActive: false } });
     }
 
     res.json({

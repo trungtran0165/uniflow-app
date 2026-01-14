@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, Users, Plus, Trash2 } from "lucide-react";
-import { adminClassesAPI, curriculumAPI, adminProgramsAPI, adminSemestersAPI, adminRoomsAPI, usersAPI } from "@/lib/api";
+import { CalendarDays, Users, Plus, Trash2, Download } from "lucide-react";
+import { adminClassesAPI, curriculumAPI, adminSemestersAPI, adminRoomsAPI, usersAPI } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ContentLoader from "@/components/common/ContentLoader";
+import { exportClassStudentsToExcel } from "@/lib/excel";
 
 interface Class {
   _id: string;
@@ -56,6 +58,13 @@ const AdminClasses = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [isEditScheduleDialogOpen, setIsEditScheduleDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingClass, setDeletingClass] = useState<Class | null>(null);
+  const [isStudentsDialogOpen, setIsStudentsDialogOpen] = useState(false);
+  const [studentsClass, setStudentsClass] = useState<Class | null>(null);
+  const [studentIdentifier, setStudentIdentifier] = useState("");
+  const [forceAdd, setForceAdd] = useState(false);
+  const [forceReason, setForceReason] = useState("");
   const [scheduleFormData, setScheduleFormData] = useState<Array<{ dayOfWeek: number; period: string; roomId: string }>>([]);
   const [formData, setFormData] = useState({
     code: "",
@@ -82,7 +91,7 @@ const AdminClasses = () => {
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const { data: courses = [] } = useQuery({
     queryKey: ["admin-program-courses", selectedProgramId],
-    queryFn: () => adminProgramsAPI.getCourses(selectedProgramId),
+    queryFn: () => curriculumAPI.getProgramCourses(selectedProgramId),
     enabled: !!selectedProgramId,
   });
 
@@ -175,6 +184,71 @@ const AdminClasses = () => {
     },
   });
 
+  const updateClassStatusMutation = useMutation({
+    mutationFn: ({ classId, status }: { classId: string; status: string }) => adminClassesAPI.update(classId, { status }),
+    onSuccess: () => {
+      toast({ title: "Thành công", description: "Đã cập nhật trạng thái lớp" });
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể cập nhật trạng thái lớp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteClassMutation = useMutation({
+    mutationFn: (classId: string) => adminClassesAPI.delete(classId),
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã xoá lớp học phần",
+      });
+      setIsDeleteDialogOpen(false);
+      setDeletingClass(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể xoá lớp học phần",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: classStudents = [], isLoading: isLoadingClassStudents } = useQuery({
+    queryKey: ["admin-class-students", studentsClass?._id],
+    queryFn: () => adminClassesAPI.getStudents(studentsClass!._id),
+    enabled: !!studentsClass && isStudentsDialogOpen,
+  });
+
+  const addStudentMutation = useMutation({
+    mutationFn: (payload: any) => adminClassesAPI.addStudent(studentsClass!._id, payload),
+    onSuccess: () => {
+      toast({ title: "Thành công", description: "Đã thêm sinh viên vào lớp" });
+      setStudentIdentifier("");
+      setForceReason("");
+      queryClient.invalidateQueries({ queryKey: ["admin-class-students", studentsClass?._id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Lỗi", description: error.message || "Không thể thêm sinh viên", variant: "destructive" }),
+  });
+
+  const removeStudentMutation = useMutation({
+    mutationFn: (enrollmentId: string) => adminClassesAPI.removeStudent(studentsClass!._id, enrollmentId),
+    onSuccess: () => {
+      toast({ title: "Thành công", description: "Đã xoá sinh viên khỏi lớp" });
+      queryClient.invalidateQueries({ queryKey: ["admin-class-students", studentsClass?._id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Lỗi", description: error.message || "Không thể xoá sinh viên", variant: "destructive" }),
+  });
+
   const handleEditSchedule = (cls: Class) => {
     setEditingClass(cls);
     setScheduleFormData(cls.schedule?.map((s: any) => ({
@@ -208,6 +282,32 @@ const AdminClasses = () => {
 
   const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
 
+  const statusLabel = (status: string) => {
+    if (status === "open") return "Đang mở";
+    if (status === "closed") return "Đã đóng";
+    if (status === "cancelled") return "Đã hủy";
+    return "Draft";
+  };
+
+  const handleExportStudents = () => {
+    if (!studentsClass) return;
+    try {
+      exportClassStudentsToExcel({
+        classCode: studentsClass.code,
+        courseName: studentsClass.courseId?.name,
+        semesterName: studentsClass.semesterId?.name,
+        students: classStudents,
+      });
+      toast({ title: "Thành công", description: "Đã xuất file Excel danh sách sinh viên" });
+    } catch (e) {
+      toast({
+        title: "Lỗi",
+        description: e instanceof Error ? e.message : "Không thể xuất file Excel",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <section aria-labelledby="admin-classes-heading" className="space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -239,7 +339,7 @@ const AdminClasses = () => {
         </CardHeader>
         <CardContent className="space-y-2 text-xs md:text-sm">
           {isLoading ? (
-            <p className="text-muted-foreground">Đang tải...</p>
+            <ContentLoader size="card" title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách lớp học phần" />
           ) : classes.length === 0 ? (
             <p className="text-muted-foreground">Chưa có lớp học phần nào</p>
           ) : (
@@ -262,6 +362,27 @@ const AdminClasses = () => {
                   <span className="pill-badge">
                     <Users className="mr-1 h-3.5 w-3.5" /> {cls.enrolled} / {cls.capacity}
                   </span>
+                  <span className="pill-badge">{statusLabel(cls.status)}</span>
+                  {cls.status === "draft" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateClassStatusMutation.isPending || (cls.schedule?.length ?? 0) === 0}
+                      title={(cls.schedule?.length ?? 0) === 0 ? "Cần thêm lịch học trước khi mở lớp" : "Mở lớp cho sinh viên đăng ký"}
+                      onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "open" })}
+                    >
+                      Mở lớp
+                    </Button>
+                  ) : cls.status === "open" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateClassStatusMutation.isPending}
+                      onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "closed" })}
+                    >
+                      Đóng lớp
+                    </Button>
+                  ) : null}
                   <Button 
                     size="sm" 
                     variant="outline"
@@ -269,12 +390,191 @@ const AdminClasses = () => {
                   >
                     Sửa lịch / phòng
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setStudentsClass(cls);
+                      setIsStudentsDialogOpen(true);
+                    }}
+                  >
+                    Sinh viên
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    title="Xoá lớp học phần"
+                    aria-label="Xoá lớp học phần"
+                    onClick={() => {
+                      setDeletingClass(cls);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))
           )}
         </CardContent>
       </Card>
+
+      {/* Students Dialog */}
+      <Dialog
+        open={isStudentsDialogOpen}
+        onOpenChange={(open) => {
+          setIsStudentsDialogOpen(open);
+          if (!open) {
+            setStudentsClass(null);
+            setStudentIdentifier("");
+            setForceAdd(false);
+            setForceReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Danh sách sinh viên đăng ký</DialogTitle>
+            <DialogDescription>
+              Lớp: <span className="font-semibold">{studentsClass?.code}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <div className="grid gap-2">
+              <Label>MSSV / Student ObjectId / UserId</Label>
+              <Input
+                value={studentIdentifier}
+                onChange={(e) => setStudentIdentifier(e.target.value)}
+                placeholder="VD: 21520001"
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <Button
+                variant={forceAdd ? "default" : "outline"}
+                type="button"
+                onClick={() => setForceAdd((v) => !v)}
+              >
+                Force
+              </Button>
+              <Button
+                type="button"
+                onClick={() =>
+                  addStudentMutation.mutate({
+                    studentIdentifier: studentIdentifier.trim(),
+                    force: forceAdd,
+                    forceReason: forceAdd ? forceReason : undefined,
+                  })
+                }
+                disabled={!studentIdentifier.trim() || addStudentMutation.isPending}
+              >
+                {addStudentMutation.isPending ? "Đang thêm..." : "Thêm"}
+              </Button>
+            </div>
+          </div>
+          {forceAdd ? (
+            <div className="grid gap-2">
+              <Label>Lý do force (tuỳ chọn)</Label>
+              <Input value={forceReason} onChange={(e) => setForceReason(e.target.value)} placeholder="VD: Admin add" />
+            </div>
+          ) : null}
+
+          <Card className="glass-panel interactive-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-base">Sinh viên</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={handleExportStudents}
+                disabled={isLoadingClassStudents || classStudents.length === 0}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto text-sm">
+              {isLoadingClassStudents ? (
+                <ContentLoader size="card" title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách sinh viên" />
+              ) : classStudents.length === 0 ? (
+                <p className="text-muted-foreground">Chưa có sinh viên nào</p>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="border-b text-xs text-muted-foreground">
+                    <tr>
+                      <th className="py-2 text-left font-medium">MSSV</th>
+                      <th className="py-2 text-left font-medium">Họ tên</th>
+                      <th className="py-2 text-left font-medium">Email</th>
+                      <th className="py-2 text-left font-medium">Trạng thái</th>
+                      <th className="py-2 text-right font-medium">Xoá</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classStudents.map((row: any) => (
+                      <tr key={row.enrollmentId} className="border-b last:border-b-0">
+                        <td className="py-2 font-medium">{row.student?.studentId || "N/A"}</td>
+                        <td className="py-2">{row.student?.userId?.name || "N/A"}</td>
+                        <td className="py-2 text-xs text-muted-foreground">{row.student?.userId?.email || ""}</td>
+                        <td className="py-2 text-xs text-muted-foreground">
+                          {row.status === "registered"
+                            ? "Đã đăng ký"
+                            : row.status === "waitlist"
+                            ? `Waitlist #${row.waitlistPosition || "?"}`
+                            : row.status}
+                        </td>
+                        <td className="py-2 text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => removeStudentMutation.mutate(row.enrollmentId)}
+                            disabled={removeStudentMutation.isPending}
+                            title="Xoá sinh viên khỏi lớp"
+                            aria-label="Xoá sinh viên khỏi lớp"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Class Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xoá lớp học phần?</DialogTitle>
+            <DialogDescription>
+              Bạn sắp xoá lớp <span className="font-semibold">{deletingClass?.code}</span>. Thao tác này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeletingClass(null);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingClass?._id && deleteClassMutation.mutate(deletingClass._id)}
+              disabled={deleteClassMutation.isPending || !deletingClass?._id}
+            >
+              {deleteClassMutation.isPending ? "Đang xoá..." : "Xoá"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Class Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>

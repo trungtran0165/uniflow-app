@@ -40,6 +40,8 @@ export const createCourseSchema = z.object({
   code: z.string().min(1, 'Course code is required'),
   name: z.string().min(1, 'Course name is required'),
   credits: z.number().int().min(1, 'Credits must be at least 1'),
+  theoryCredits: z.number().int().min(0).optional(),
+  practiceCredits: z.number().int().min(0).optional(),
   description: z.string().optional(),
   programId: z.string().min(1, 'Program ID is required'),
   semester: z.number().int().min(1, 'Semester must be at least 1'),
@@ -66,7 +68,9 @@ export const createClassSchema = z.object({
   notes: z.string().optional(),
 });
 
-export const updateClassSchema = createClassSchema.partial();
+export const updateClassSchema = createClassSchema.partial().extend({
+  status: z.enum(['draft', 'open', 'closed', 'cancelled']).optional(),
+});
 
 // Admin - Registration Window schemas
 export const createRegistrationWindowSchema = z.object({
@@ -76,6 +80,7 @@ export const createRegistrationWindowSchema = z.object({
   endDate: z.union([z.string().datetime(), z.string()]),
   minCredits: z.number().int().min(0),
   maxCredits: z.number().int().min(1),
+  classIds: z.array(z.string()).optional(),
   targetCohorts: z.array(z.string()).optional(),
   targetMajors: z.array(z.string()).optional(),
   rules: z.object({
@@ -102,6 +107,14 @@ export const updateGradeSchema = z.object({
 // Common ID schemas
 export const idParamSchema = z.object({
   id: z.string().min(1, 'ID is required'),
+});
+
+export const courseIdParamSchema = z.object({
+  courseId: z.string().min(1, 'Course ID is required'),
+});
+
+export const roomIdParamSchema = z.object({
+  roomId: z.string().min(1, 'Room ID is required'),
 });
 
 export const programIdSchema = z.object({

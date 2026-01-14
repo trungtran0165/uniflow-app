@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lecturersAPI, authAPI } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const LecturerGrading = () => {
   const { toast } = useToast();
@@ -148,7 +149,7 @@ const LecturerGrading = () => {
               {isLoadingStudents ? (
                 <tr>
                   <td colSpan={5} className="border px-2 py-4 text-center text-muted-foreground">
-                    Đang tải...
+                    <ContentLoader size="card" title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách sinh viên" />
                   </td>
                 </tr>
               ) : studentsWithGrades.length === 0 ? (

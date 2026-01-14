@@ -1,10 +1,14 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
+import ContentLoader from "@/components/common/ContentLoader";
 
 const LecturerLayout = () => {
   return (
     <AppLayout role="lecturer">
-      <Outlet />
+      <Suspense fallback={<ContentLoader />}>
+        <Outlet />
+      </Suspense>
     </AppLayout>
   );
 };

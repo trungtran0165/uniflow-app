@@ -13,10 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpenCheck, FilePenLine, Plus } from "lucide-react";
+import { BookOpenCheck, FilePenLine, Plus, Trash2, Pencil, Unlink } from "lucide-react";
 import { Link } from "react-router-dom";
-import { adminProgramsAPI, curriculumAPI } from "@/lib/api";
+import { adminProgramsAPI, adminCoursesAPI, curriculumAPI } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ContentLoader from "@/components/common/ContentLoader";
+import { Badge } from "@/components/ui/badge";
 
 interface Program {
   _id: string;
@@ -34,19 +36,27 @@ const AdminPrograms = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingProgram, setDeletingProgram] = useState<Program | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    code: "",
+    name: "",
+    system: "chinh-quy" as "chinh-quy" | "tu-xa",
+    cohort: "",
+    major: "",
+    majorLabel: "",
+    version: "1.0",
+  });
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [isCoursesDialogOpen, setIsCoursesDialogOpen] = useState(false);
   const [isPrerequisitesDialogOpen, setIsPrerequisitesDialogOpen] = useState(false);
-  const [isCreateCourseDialogOpen, setIsCreateCourseDialogOpen] = useState(false);
-  const [courseFormData, setCourseFormData] = useState({
-    code: "",
-    name: "",
-    credits: 3,
-    description: "",
-    semester: 1,
-    isRequired: true,
-    prerequisites: [] as string[],
-  });
+  const [isAssignCourseDialogOpen, setIsAssignCourseDialogOpen] = useState(false);
+  const [assignCourseId, setAssignCourseId] = useState<string>("");
+  const [assignSemester, setAssignSemester] = useState<number>(1);
+  const [assignCategory, setAssignCategory] = useState<"core" | "required" | "elective">("required");
+  const [assignElectiveGroup, setAssignElectiveGroup] = useState<string>("");
   const [formData, setFormData] = useState({
     code: "",
     name: "",
@@ -63,10 +73,10 @@ const AdminPrograms = () => {
     queryFn: () => adminProgramsAPI.getAll(),
   });
 
-  // Fetch courses for selected program
+  // Fetch curriculum mappings for selected program (ProgramCourse)
   const { data: programCourses = [] } = useQuery({
-    queryKey: ["admin-program-courses", selectedProgram?._id],
-    queryFn: () => adminProgramsAPI.getCourses(selectedProgram!._id),
+    queryKey: ["admin-program-curriculum", selectedProgram?._id],
+    queryFn: () => adminProgramsAPI.getCurriculum(selectedProgram!._id),
     enabled: !!selectedProgram && isCoursesDialogOpen,
   });
 
@@ -77,32 +87,86 @@ const AdminPrograms = () => {
     enabled: !!selectedProgram && isPrerequisitesDialogOpen,
   });
 
-  // Create course mutation
-  const createCourseMutation = useMutation({
-    mutationFn: (data: any) => adminProgramsAPI.createCourse(selectedProgram!._id, data),
+  const deleteProgramMutation = useMutation({
+    mutationFn: (programId: string) => adminProgramsAPI.delete(programId),
     onSuccess: () => {
       toast({
         title: "Thành công",
-        description: "Đã tạo học phần mới",
+        description: "CTĐT đã chuyển sang trạng thái 'Đã xoá'",
       });
-      setIsCreateCourseDialogOpen(false);
-      setCourseFormData({
-        code: "",
-        name: "",
-        credits: 3,
-        description: "",
-        semester: 1,
-        isRequired: true,
-        prerequisites: [],
-      });
-      queryClient.invalidateQueries({ queryKey: ["admin-program-courses", selectedProgram?._id] });
+      setIsDeleteDialogOpen(false);
+      setDeletingProgram(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-programs"] });
     },
     onError: (error: Error) => {
       toast({
         title: "Lỗi",
-        description: error.message || "Không thể tạo học phần",
+        description: error.message || "Không thể xoá CTĐT",
         variant: "destructive",
       });
+    },
+  });
+
+  const updateProgramMutation = useMutation({
+    mutationFn: ({ programId, data }: { programId: string; data: any }) => adminProgramsAPI.update(programId, data),
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật CTĐT",
+      });
+      setIsEditDialogOpen(false);
+      setEditingProgram(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-programs"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể cập nhật CTĐT",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fetch unassigned courses (created in "Quản lý học phần")
+  const { data: unassignedCourses = [] } = useQuery({
+    queryKey: ["admin-courses-unassigned"],
+    queryFn: () => adminCoursesAPI.getAll({ unassigned: true }),
+    enabled: isAssignCourseDialogOpen,
+  });
+
+  // Assign existing course into selected program
+  const assignCourseMutation = useMutation({
+    mutationFn: (payload: any) => adminProgramsAPI.addToCurriculum(selectedProgram!._id, payload),
+    onSuccess: () => {
+      toast({
+        title: "Thành công",
+        description: "Đã thêm học phần vào CTĐT",
+      });
+      setIsAssignCourseDialogOpen(false);
+      setAssignCourseId("");
+      setAssignSemester(1);
+      setAssignCategory("required");
+      setAssignElectiveGroup("");
+      queryClient.invalidateQueries({ queryKey: ["admin-program-curriculum", selectedProgram?._id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-courses-unassigned"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể thêm học phần vào CTĐT",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeProgramCourseMutation = useMutation({
+    mutationFn: (programCourseId: string) => adminProgramsAPI.removeFromCurriculum(selectedProgram!._id, programCourseId),
+    onSuccess: () => {
+      toast({ title: "Thành công", description: "Đã gỡ học phần khỏi CTĐT" });
+      queryClient.invalidateQueries({ queryKey: ["admin-program-curriculum", selectedProgram?._id] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message || "Không thể gỡ học phần", variant: "destructive" });
     },
   });
 
@@ -204,14 +268,16 @@ const AdminPrograms = () => {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {isLoading ? (
-            <p className="text-muted-foreground">Đang tải...</p>
+            <ContentLoader size="card" title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách CTĐT" />
           ) : programs.length === 0 ? (
             <p className="text-muted-foreground">Chưa có CTĐT nào</p>
           ) : (
             programs.map((program: Program) => (
               <div
                 key={program._id}
-                className="flex flex-col gap-2 rounded-lg border bg-card/80 px-3 py-2 md:flex-row md:items-center md:justify-between"
+                className={`flex flex-col gap-2 rounded-lg border bg-card/80 px-3 py-2 md:flex-row md:items-center md:justify-between ${
+                  program.isActive ? "" : "opacity-70"
+                }`}
               >
                 <div>
                   <p className="font-semibold text-foreground">
@@ -222,6 +288,9 @@ const AdminPrograms = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
+                  <Badge variant={program.isActive ? "secondary" : "outline"} className="whitespace-nowrap">
+                    {program.isActive ? "Đang hoạt động" : "Đã xoá"}
+                  </Badge>
                   <Button 
                     size="sm" 
                     variant="outline"
@@ -236,12 +305,186 @@ const AdminPrograms = () => {
                   >
                     Điều kiện tiên quyết
                   </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Chỉnh sửa CTĐT"
+                    aria-label="Chỉnh sửa CTĐT"
+                    disabled={!program.isActive}
+                    onClick={() => {
+                      setEditingProgram(program);
+                      setEditFormData({
+                        code: program.code,
+                        name: program.name,
+                        system: program.system,
+                        cohort: program.cohort,
+                        major: program.major,
+                        majorLabel: program.majorLabel,
+                        version: program.version || "1.0",
+                      });
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    title="Xoá CTĐT"
+                    aria-label="Xoá CTĐT"
+                    disabled={!program.isActive}
+                    onClick={() => {
+                      setDeletingProgram(program);
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Program Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa CTĐT</DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin CTĐT <span className="font-semibold">{editingProgram?.code}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="editCode">Mã CTĐT</Label>
+              <Input id="editCode" value={editFormData.code} disabled />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editName">Tên CTĐT</Label>
+              <Input
+                id="editName"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Hệ đào tạo</Label>
+                <Select
+                  value={editFormData.system}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, system: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chinh-quy">Chính quy</SelectItem>
+                    <SelectItem value="tu-xa">Từ xa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editCohort">Khóa</Label>
+                <Input
+                  id="editCohort"
+                  value={editFormData.cohort}
+                  onChange={(e) => setEditFormData({ ...editFormData, cohort: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="editMajor">Chuyên ngành (code)</Label>
+                <Input
+                  id="editMajor"
+                  value={editFormData.major}
+                  onChange={(e) => setEditFormData({ ...editFormData, major: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editMajorLabel">Chuyên ngành (hiển thị)</Label>
+                <Input
+                  id="editMajorLabel"
+                  value={editFormData.majorLabel}
+                  onChange={(e) => setEditFormData({ ...editFormData, majorLabel: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editVersion">Version</Label>
+              <Input
+                id="editVersion"
+                value={editFormData.version}
+                onChange={(e) => setEditFormData({ ...editFormData, version: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditingProgram(null);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editingProgram?._id) return;
+                updateProgramMutation.mutate({
+                  programId: editingProgram._id,
+                  data: {
+                    name: editFormData.name,
+                    system: editFormData.system,
+                    cohort: editFormData.cohort,
+                    major: editFormData.major,
+                    majorLabel: editFormData.majorLabel,
+                    version: editFormData.version,
+                  },
+                });
+              }}
+              disabled={updateProgramMutation.isPending || !editingProgram?._id}
+            >
+              {updateProgramMutation.isPending ? "Đang lưu..." : "Lưu thay đổi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Program Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xoá CTĐT?</DialogTitle>
+            <DialogDescription>
+              Bạn sắp xoá CTĐT <span className="font-semibold">{deletingProgram?.code}</span> –{" "}
+              <span className="font-semibold">{deletingProgram?.name}</span>. Thao tác này sẽ ẩn CTĐT (soft delete).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeletingProgram(null);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingProgram?._id && deleteProgramMutation.mutate(deletingProgram._id)}
+              disabled={deleteProgramMutation.isPending || !deletingProgram?._id}
+            >
+              {deleteProgramMutation.isPending ? "Đang xoá..." : "Xoá CTĐT"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Program Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -354,10 +597,10 @@ const AdminPrograms = () => {
               </p>
               <Button
                 size="sm"
-                onClick={() => setIsCreateCourseDialogOpen(true)}
+                onClick={() => setIsAssignCourseDialogOpen(true)}
                 className="flex items-center gap-2"
               >
-                <Plus className="h-4 w-4" /> Tạo học phần mới
+                <Plus className="h-4 w-4" /> Thêm học phần đã tạo
               </Button>
             </div>
             {programCourses.length === 0 ? (
@@ -367,25 +610,41 @@ const AdminPrograms = () => {
                 <table className="min-w-full text-sm">
                   <thead className="border-b text-xs text-muted-foreground">
                     <tr>
-                      <th className="py-2 text-left font-medium">Mã HP</th>
+                      <th className="py-2 text-left font-medium">Mã</th>
                       <th className="py-2 text-left font-medium">Tên học phần</th>
                       <th className="py-2 text-center font-medium">TC</th>
-                      <th className="py-2 text-center font-medium">HK</th>
-                      <th className="py-2 text-center font-medium">Bắt buộc</th>
+                      <th className="py-2 text-center font-medium">Loại</th>
+                      <th className="py-2 text-center font-medium">HK gợi ý</th>
+                      <th className="py-2 text-right font-medium">Gỡ</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {programCourses.map((course: any) => (
-                      <tr key={course._id} className="border-b">
-                        <td className="py-2 font-medium">{course.code}</td>
-                        <td className="py-2">{course.name}</td>
-                        <td className="py-2 text-center">{course.credits}</td>
-                        <td className="py-2 text-center">{course.semester}</td>
-                        <td className="py-2 text-center">
-                          {course.isRequired ? "✓" : "○"}
-                        </td>
-                      </tr>
-                    ))}
+                    {programCourses.map((pc: any) => {
+                      const c = pc.courseId || {};
+                      const categoryLabel =
+                        pc.category === "core" ? "Chung" : pc.category === "required" ? "Bắt buộc" : "Tự chọn";
+                      return (
+                        <tr key={pc._id} className="border-b">
+                          <td className="py-2 font-medium">{c.code || "N/A"}</td>
+                          <td className="py-2">{c.name || "N/A"}</td>
+                          <td className="py-2 text-center">{c.credits ?? "—"}</td>
+                          <td className="py-2 text-center">{categoryLabel}</td>
+                          <td className="py-2 text-center">{pc.recommendedSemester ?? "—"}</td>
+                          <td className="py-2 text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Gỡ khỏi CTĐT"
+                              aria-label="Gỡ khỏi CTĐT"
+                              onClick={() => removeProgramCourseMutation.mutate(pc._id)}
+                              disabled={removeProgramCourseMutation.isPending}
+                            >
+                              <Unlink className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -399,116 +658,99 @@ const AdminPrograms = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Create Course Dialog */}
-      <Dialog open={isCreateCourseDialogOpen} onOpenChange={setIsCreateCourseDialogOpen}>
+      {/* Assign Existing Course Dialog */}
+      <Dialog open={isAssignCourseDialogOpen} onOpenChange={setIsAssignCourseDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Tạo học phần mới</DialogTitle>
+            <DialogTitle>Thêm học phần đã tạo</DialogTitle>
             <DialogDescription>
-              Thêm học phần vào chương trình đào tạo: {selectedProgram?.code} - {selectedProgram?.name}
+              Chọn học phần (đã tạo ở "Quản lý học phần") và gán vào CTĐT: {selectedProgram?.code} - {selectedProgram?.name}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+
+          <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="courseCode">Mã học phần *</Label>
-              <Input
-                id="courseCode"
-                placeholder="VD: CTDLGT202"
-                value={courseFormData.code}
-                onChange={(e) => setCourseFormData({ ...courseFormData, code: e.target.value.toUpperCase() })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="courseName">Tên học phần *</Label>
-              <Input
-                id="courseName"
-                placeholder="VD: Cấu trúc dữ liệu và giải thuật"
-                value={courseFormData.name}
-                onChange={(e) => setCourseFormData({ ...courseFormData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="credits">Số tín chỉ *</Label>
-                <Input
-                  id="credits"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={courseFormData.credits}
-                  onChange={(e) => setCourseFormData({ ...courseFormData, credits: parseInt(e.target.value) || 3 })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="semester">Học kỳ *</Label>
-                <Input
-                  id="semester"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={courseFormData.semester}
-                  onChange={(e) => setCourseFormData({ ...courseFormData, semester: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Mô tả</Label>
-              <Input
-                id="description"
-                placeholder="Mô tả ngắn về học phần (tùy chọn)"
-                value={courseFormData.description}
-                onChange={(e) => setCourseFormData({ ...courseFormData, description: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="isRequired">Loại học phần</Label>
-              <Select
-                value={courseFormData.isRequired ? "required" : "optional"}
-                onValueChange={(value) => setCourseFormData({ ...courseFormData, isRequired: value === "required" })}
-              >
+              <Label>Học phần</Label>
+              <Select value={assignCourseId} onValueChange={setAssignCourseId}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn học phần chưa gán CTĐT" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="required">Bắt buộc</SelectItem>
-                  <SelectItem value="optional">Tự chọn</SelectItem>
+                  {(unassignedCourses as any[]).map((c: any) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.code} — {c.name} ({c.credits} TC)
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Điều kiện tiên quyết (tùy chọn)</Label>
               <p className="text-xs text-muted-foreground">
-                Bạn có thể thêm điều kiện tiên quyết sau khi tạo học phần.
+                Nếu danh sách trống, hãy tạo học phần ở menu "Quản lý học phần" trước.
               </p>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="assignSemester">Học kỳ</Label>
+                <Input
+                  id="assignSemester"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={assignSemester}
+                  onChange={(e) => setAssignSemester(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Loại học phần</Label>
+                <Select value={assignCategory} onValueChange={(v) => setAssignCategory(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="core">Chung (mọi ngành)</SelectItem>
+                    <SelectItem value="required">Bắt buộc</SelectItem>
+                    <SelectItem value="elective">Tự chọn</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {assignCategory === "elective" ? (
+              <div className="grid gap-2">
+                <Label>Nhóm tự chọn (tuỳ chọn)</Label>
+                <Input
+                  value={assignElectiveGroup}
+                  onChange={(e) => setAssignElectiveGroup(e.target.value)}
+                  placeholder="VD: Tự chọn ngành / Tự chọn tự do"
+                />
+              </div>
+            ) : null}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateCourseDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsAssignCourseDialogOpen(false)}>
               Hủy
             </Button>
             <Button
               onClick={() => {
-                if (!courseFormData.code || !courseFormData.name) {
+                if (!assignCourseId || !selectedProgram?._id) {
                   toast({
                     title: "Lỗi",
-                    description: "Vui lòng điền mã và tên học phần",
+                    description: "Vui lòng chọn học phần",
                     variant: "destructive",
                   });
                   return;
                 }
-                createCourseMutation.mutate({
-                  code: courseFormData.code,
-                  name: courseFormData.name,
-                  credits: courseFormData.credits,
-                  description: courseFormData.description,
-                  semester: courseFormData.semester,
-                  isRequired: courseFormData.isRequired,
-                  prerequisites: courseFormData.prerequisites,
+                assignCourseMutation.mutate({
+                  courseId: assignCourseId,
+                  category: assignCategory,
+                  recommendedSemester: assignSemester,
+                  electiveGroup: assignCategory === "elective" ? assignElectiveGroup : "",
                 });
               }}
-              disabled={createCourseMutation.isPending}
+              disabled={assignCourseMutation.isPending}
             >
-              {createCourseMutation.isPending ? "Đang tạo..." : "Tạo học phần"}
+              {assignCourseMutation.isPending ? "Đang thêm..." : "Thêm vào CTĐT"}
             </Button>
           </DialogFooter>
         </DialogContent>
