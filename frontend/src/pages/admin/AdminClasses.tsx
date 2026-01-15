@@ -18,6 +18,7 @@ import { adminClassesAPI, curriculumAPI, adminSemestersAPI, adminRoomsAPI, users
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ContentLoader from "@/components/common/ContentLoader";
 import { exportClassStudentsToExcel } from "@/lib/excel";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Class {
   _id: string;
@@ -65,6 +66,7 @@ const AdminClasses = () => {
   const [studentIdentifier, setStudentIdentifier] = useState("");
   const [forceAdd, setForceAdd] = useState(false);
   const [forceReason, setForceReason] = useState("");
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [scheduleFormData, setScheduleFormData] = useState<Array<{ dayOfWeek: number; period: string; roomId: string }>>([]);
   const [formData, setFormData] = useState({
     code: "",
@@ -199,6 +201,33 @@ const AdminClasses = () => {
     },
   });
 
+  const bulkUpdateStatusMutation = useMutation({
+    mutationFn: async ({ classIds, status }: { classIds: string[]; status: string }) => {
+      const results = await Promise.allSettled(
+        classIds.map((classId) => adminClassesAPI.update(classId, { status }))
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const success = results.length - failed;
+      toast({
+        title: "Cập nhật trạng thái",
+        description: failed === 0 ? `Đã cập nhật ${success} lớp` : `Đã cập nhật ${success} lớp, lỗi ${failed} lớp`,
+        variant: failed === 0 ? "default" : "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-classes"] });
+      setSelectedClassIds([]);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể cập nhật trạng thái lớp",
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteClassMutation = useMutation({
     mutationFn: (classId: string) => adminClassesAPI.delete(classId),
     onSuccess: () => {
@@ -289,6 +318,21 @@ const AdminClasses = () => {
     return "Draft";
   };
 
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedClassIds(classes.map((cls: Class) => cls._id));
+    } else {
+      setSelectedClassIds([]);
+    }
+  };
+
+  const toggleSelectOne = (classId: string, checked: boolean) => {
+    setSelectedClassIds((prev) => {
+      if (checked) return prev.includes(classId) ? prev : [...prev, classId];
+      return prev.filter((id) => id !== classId);
+    });
+  };
+
   const handleExportStudents = () => {
     if (!studentsClass) return;
     try {
@@ -335,7 +379,29 @@ const AdminClasses = () => {
             <CardTitle className="text-base">Danh sách lớp học phần</CardTitle>
             <p className="text-xs text-muted-foreground">Bộ lọc theo môn, khoa, giảng viên sẽ được bổ sung sau.</p>
           </div>
-          <CalendarDays className="h-5 w-5 text-primary" />
+          <div className="flex items-center gap-2">
+            {selectedClassIds.length > 0 ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bulkUpdateStatusMutation.mutate({ classIds: selectedClassIds, status: "open" })}
+                  disabled={bulkUpdateStatusMutation.isPending}
+                >
+                  Mở lớp ({selectedClassIds.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bulkUpdateStatusMutation.mutate({ classIds: selectedClassIds, status: "closed" })}
+                  disabled={bulkUpdateStatusMutation.isPending}
+                >
+                  Đóng lớp
+                </Button>
+              </>
+            ) : null}
+            <CalendarDays className="h-5 w-5 text-primary" />
+          </div>
         </CardHeader>
         <CardContent className="space-y-2 text-xs md:text-sm">
           {isLoading ? (
@@ -343,79 +409,96 @@ const AdminClasses = () => {
           ) : classes.length === 0 ? (
             <p className="text-muted-foreground">Chưa có lớp học phần nào</p>
           ) : (
-            classes.map((cls: Class) => (
-              <div
-                key={cls._id}
-                className="flex flex-col gap-2 rounded-lg border bg-card/80 px-3 py-2 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">
-                    {cls.code} – {cls.courseId?.name || "N/A"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    GV: {cls.lecturerId?.name || "N/A"} •{" "}
-                    {cls.schedule?.map((s) => `${dayNames[s.dayOfWeek]} (${s.period})`).join(", ") || "Chưa có lịch"}{" "}
-                    • Phòng: {cls.schedule?.[0]?.roomId?.code || "N/A"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="pill-badge">
-                    <Users className="mr-1 h-3.5 w-3.5" /> {cls.enrolled} / {cls.capacity}
-                  </span>
-                  <span className="pill-badge">{statusLabel(cls.status)}</span>
-                  {cls.status === "draft" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={updateClassStatusMutation.isPending || (cls.schedule?.length ?? 0) === 0}
-                      title={(cls.schedule?.length ?? 0) === 0 ? "Cần thêm lịch học trước khi mở lớp" : "Mở lớp cho sinh viên đăng ký"}
-                      onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "open" })}
-                    >
-                      Mở lớp
-                    </Button>
-                  ) : cls.status === "open" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={updateClassStatusMutation.isPending}
-                      onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "closed" })}
-                    >
-                      Đóng lớp
-                    </Button>
-                  ) : null}
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => handleEditSchedule(cls)}
-                  >
-                    Sửa lịch / phòng
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setStudentsClass(cls);
-                      setIsStudentsDialogOpen(true);
-                    }}
-                  >
-                    Sinh viên
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive"
-                    title="Xoá lớp học phần"
-                    aria-label="Xoá lớp học phần"
-                    onClick={() => {
-                      setDeletingClass(cls);
-                      setIsDeleteDialogOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+            <>
+              <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={selectedClassIds.length === classes.length}
+                  onCheckedChange={(v) => toggleSelectAll(Boolean(v))}
+                  aria-label="Chọn tất cả lớp"
+                />
+                <span>Chọn tất cả</span>
               </div>
-            ))
+              {classes.map((cls: Class) => (
+                <div
+                  key={cls._id}
+                  className="flex flex-col gap-2 rounded-lg border bg-card/80 px-3 py-2 md:flex-row md:items-center md:justify-between"
+                >
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      checked={selectedClassIds.includes(cls._id)}
+                      onCheckedChange={(v) => toggleSelectOne(cls._id, Boolean(v))}
+                      aria-label={`Chọn lớp ${cls.code}`}
+                    />
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {cls.code} – {cls.courseId?.name || "N/A"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        GV: {cls.lecturerId?.name || "N/A"} •{" "}
+                        {cls.schedule?.map((s) => `${dayNames[s.dayOfWeek]} (${s.period})`).join(", ") || "Chưa có lịch"}{" "}
+                        • Phòng: {cls.schedule?.[0]?.roomId?.code || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="pill-badge">
+                      <Users className="mr-1 h-3.5 w-3.5" /> {cls.enrolled} / {cls.capacity}
+                    </span>
+                    <span className="pill-badge">{statusLabel(cls.status)}</span>
+                    {cls.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updateClassStatusMutation.isPending || (cls.schedule?.length ?? 0) === 0}
+                        title={(cls.schedule?.length ?? 0) === 0 ? "Cần thêm lịch học trước khi mở lớp" : "Mở lớp cho sinh viên đăng ký"}
+                        onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "open" })}
+                      >
+                        Mở lớp
+                      </Button>
+                    ) : cls.status === "open" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updateClassStatusMutation.isPending}
+                        onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "closed" })}
+                      >
+                        Đóng lớp
+                      </Button>
+                    ) : null}
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handleEditSchedule(cls)}
+                    >
+                      Sửa lịch / phòng
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setStudentsClass(cls);
+                        setIsStudentsDialogOpen(true);
+                      }}
+                    >
+                      Sinh viên
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      title="Xoá lớp học phần"
+                      aria-label="Xoá lớp học phần"
+                      onClick={() => {
+                        setDeletingClass(cls);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </CardContent>
       </Card>

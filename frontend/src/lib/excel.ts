@@ -81,4 +81,41 @@ export function exportClassStudentsToExcel(params: {
   saveAs(blob, fileName);
 }
 
+type StudentRow = {
+  studentId?: string;
+  cohort?: string;
+  major?: string;
+  status?: string;
+  userId?: { name?: string; email?: string };
+  programId?: { code?: string; majorLabel?: string; cohort?: string };
+};
+
+export function exportStudentsToExcel(students: StudentRow[]) {
+  const rows = students.map((s, idx) => ({
+    STT: idx + 1,
+    MSSV: s.studentId || "",
+    "Họ tên": s.userId?.name || "",
+    Email: s.userId?.email || "",
+    "CTĐT": s.programId ? `${s.programId.code || ""} • ${s.programId.majorLabel || ""}` : "Chưa gán",
+    "Khóa": s.cohort || s.programId?.cohort || "",
+    "Trạng thái": s.status || "",
+  }));
+
+  const sheet = XLSX.utils.json_to_sheet(rows, {
+    header: ["STT", "MSSV", "Họ tên", "Email", "CTĐT", "Khóa", "Trạng thái"],
+  });
+  sheet["!cols"] = [{ wch: 6 }, { wch: 12 }, { wch: 26 }, { wch: 28 }, { wch: 28 }, { wch: 10 }, { wch: 14 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Students");
+
+  const fileName = `students_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const out = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([out], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+  });
+  saveAs(blob, fileName);
+}
+
+
 

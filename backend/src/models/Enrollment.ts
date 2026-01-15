@@ -13,6 +13,7 @@ export interface IEnrollment extends Document {
   forcedBy?: mongoose.Types.ObjectId; // User ID của admin force add
   forcedAt?: Date;
   forceReason?: string; // Lý do force add
+  countAs: 'curriculum' | 'elective' | 'general'; // Cách tính cho CTĐT
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,6 +68,11 @@ const EnrollmentSchema: Schema = new Schema(
     },
     forceReason: {
       type: String,
+    },
+    countAs: {
+      type: String,
+      enum: ['curriculum', 'elective', 'general'],
+      default: 'curriculum',
     },
   },
   {

@@ -275,24 +275,50 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Validation 0: Course must be allowed for student's program (core/required/elective)
-    // (skip if forced by admin)
+    // Validation 0: Course eligibility + classify how it counts
+    // (skip blocking if forced by admin)
+    const courseId = (classDoc.courseId as any)._id || classDoc.courseId;
+    const course = await Course.findById(courseId).select('isGeneral').session(session);
+    let countAs: 'curriculum' | 'elective' | 'general' = 'curriculum';
+
     if (!isForcedEnrollment) {
-      const courseId = (classDoc.courseId as any)._id || classDoc.courseId;
-      const allowed = await ProgramCourse.findOne({
+      const inProgram = await ProgramCourse.findOne({
         programId: student.programId,
         courseId,
         isActive: true,
       }).session(session);
 
-      if (!allowed) {
-        await session.abortTransaction();
-        res.status(403).json({
-          success: false,
-          error: 'Course not allowed for this student program (not in curriculum/electives list)',
-        });
-        return;
+      if (inProgram) {
+        countAs = 'curriculum';
+      } else if (course?.isGeneral) {
+        countAs = 'general';
+      } else {
+        const inAnyProgram = await ProgramCourse.findOne({
+          courseId,
+          isActive: true,
+        }).session(session);
+
+        if (inAnyProgram) {
+          countAs = 'elective';
+        } else {
+          await session.abortTransaction();
+          res.status(403).json({
+            success: false,
+            error: 'Course not allowed for this student program (not in curriculum/electives list)',
+          });
+          return;
+        }
       }
+    } else {
+      // Forced enrollment: still classify if possible
+      const inProgram = await ProgramCourse.findOne({
+        programId: student.programId,
+        courseId,
+        isActive: true,
+      }).session(session);
+      if (inProgram) countAs = 'curriculum';
+      else if (course?.isGeneral) countAs = 'general';
+      else countAs = 'elective';
     }
 
     // Check if already enrolled (within transaction)
@@ -545,6 +571,7 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
       forcedBy: isForcedEnrollment ? req.user!.id : undefined,
       forcedAt: isForcedEnrollment ? new Date() : undefined,
       forceReason: isForcedEnrollment ? forceReason : undefined,
+      countAs,
     });
 
     await enrollment.save({ session });

@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { registrationAPI, authAPI } from "@/lib/api";
 import { useEffect } from "react";
 import ContentLoader from "@/components/common/ContentLoader";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const StudentRegistration = () => {
   const { toast } = useToast();
@@ -20,6 +21,7 @@ const StudentRegistration = () => {
   const [faculty, setFaculty] = useState("tat-ca");
   const [blockingClass, setBlockingClass] = useState<any | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
 
   // Get current user to find studentId
   const { data: userData } = useQuery({
@@ -55,6 +57,12 @@ const StudentRegistration = () => {
     enabled: !!studentId,
   });
 
+  const { data: enrollmentsData = [] } = useQuery({
+    queryKey: ["registration-enrollments", studentId],
+    queryFn: () => registrationAPI.getEnrollments(studentId!),
+    enabled: !!studentId,
+  });
+
   // Enroll mutation
   const enrollMutation = useMutation({
     mutationFn: ({ studentId, classId }: { studentId: string; classId: string }) =>
@@ -66,11 +74,41 @@ const StudentRegistration = () => {
       });
       queryClient.invalidateQueries({ queryKey: ["registration-open-classes"] });
       queryClient.invalidateQueries({ queryKey: ["registration-summary", studentId] });
+      queryClient.invalidateQueries({ queryKey: ["registration-enrollments", studentId] });
     },
     onError: (error: Error) => {
       toast({
         title: "Đăng ký thất bại",
         description: error.message || "Không thể đăng ký lớp này",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkEnrollMutation = useMutation({
+    mutationFn: async ({ studentId, classIds }: { studentId: string; classIds: string[] }) => {
+      const results = await Promise.allSettled(
+        classIds.map((classId) => registrationAPI.enroll(studentId, classId))
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const success = results.length - failed;
+      toast({
+        title: "Đăng ký hoàn tất",
+        description: failed === 0 ? `Đã đăng ký ${success} lớp` : `Đã đăng ký ${success} lớp, lỗi ${failed} lớp`,
+        variant: failed === 0 ? "default" : "destructive",
+      });
+      setSelectedClassIds([]);
+      queryClient.invalidateQueries({ queryKey: ["registration-open-classes"] });
+      queryClient.invalidateQueries({ queryKey: ["registration-summary", studentId] });
+      queryClient.invalidateQueries({ queryKey: ["registration-enrollments", studentId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Đăng ký thất bại",
+        description: error.message || "Không thể đăng ký các lớp đã chọn",
         variant: "destructive",
       });
     },
@@ -115,6 +153,44 @@ const StudentRegistration = () => {
     });
   };
 
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedClassIds(filtered.map((row: any) => row._id || row.id));
+    } else {
+      setSelectedClassIds([]);
+    }
+  };
+
+  const toggleSelectOne = (classId: string, checked: boolean) => {
+    setSelectedClassIds((prev) => {
+      if (checked) return prev.includes(classId) ? prev : [...prev, classId];
+      return prev.filter((id) => id !== classId);
+    });
+  };
+
+  const handleBulkRegister = () => {
+    if (!studentId) {
+      toast({ title: "Lỗi", description: "Vui lòng đăng nhập lại", variant: "destructive" });
+      return;
+    }
+
+    const selectedRows = filtered.filter((row: any) => selectedClassIds.includes(row._id || row.id));
+    const invalid = selectedRows.filter((row: any) => (row.status || (row.enrolled >= row.capacity ? "full" : "available")) !== "available");
+    if (invalid.length > 0) {
+      toast({
+        title: "Không thể đăng ký",
+        description: "Một số lớp đã chọn không còn khả dụng (đã đầy/điều kiện khác).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    bulkEnrollMutation.mutate({
+      studentId,
+      classIds: selectedRows.map((row: any) => row._id || row.id),
+    });
+  };
+
   const errorMessageMap: Record<string, string> = {
     full: "Lớp đã đủ sĩ số. Chuyển sang danh sách chờ hoặc chọn lớp khác.",
     conflict: "Lịch học trùng với lớp bạn đã đăng ký. Vui lòng chọn lớp khác.",
@@ -133,6 +209,11 @@ const StudentRegistration = () => {
     currentCredits: 0,
     deadline: "20/12",
   };
+
+  const selectedRows = useMemo(
+    () => filtered.filter((row: any) => selectedClassIds.includes(row._id || row.id)),
+    [filtered, selectedClassIds]
+  );
 
   if (isLoading) {
     return <ContentLoader title="Đang tải dữ liệu…" subtitle="Đang lấy danh sách lớp đang mở" />;
@@ -166,6 +247,24 @@ const StudentRegistration = () => {
                 <span className="inline-flex items-center gap-1">•</span>
                 <span>Trạng thái cập nhật thời gian thực</span>
               </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={filtered.length > 0 && selectedClassIds.length === filtered.length}
+                  onCheckedChange={(v) => toggleSelectAll(Boolean(v))}
+                  aria-label="Chọn tất cả lớp"
+                />
+                <span>Chọn tất cả</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkRegister}
+                disabled={selectedClassIds.length === 0 || bulkEnrollMutation.isPending}
+              >
+                {bulkEnrollMutation.isPending ? "Đang đăng ký..." : `Đăng ký ${selectedClassIds.length} lớp`}
+              </Button>
             </div>
 
             <div className="grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
@@ -213,6 +312,7 @@ const StudentRegistration = () => {
               <table className="min-w-full text-xs md:text-sm">
                 <thead className="border-b text-xs text-muted-foreground">
                   <tr>
+                    <th className="py-2 pr-2 text-left font-medium">Chọn</th>
                     <th className="py-2 pr-4 text-left font-medium">Mã lớp</th>
                     <th className="py-2 pr-4 text-left font-medium">Học phần</th>
                     <th className="py-2 pr-4 text-left font-medium">Khoa</th>
@@ -246,6 +346,13 @@ const StudentRegistration = () => {
 
                     return (
                       <tr key={row._id || row.id} className="border-b last:border-b-0">
+                        <td className="py-2 pr-2 align-top">
+                          <Checkbox
+                            checked={selectedClassIds.includes(row._id || row.id)}
+                            onCheckedChange={(v) => toggleSelectOne(row._id || row.id, Boolean(v))}
+                            aria-label={`Chọn lớp ${courseCode}`}
+                          />
+                        </td>
                         <td className="py-2 pr-4 align-top font-medium text-foreground">{courseCode}</td>
                         <td className="py-2 pr-4 align-top">
                           <div className="space-y-0.5">
@@ -320,6 +427,36 @@ const StudentRegistration = () => {
                 <li>• Học phần tự chọn: {summary.electiveCredits || 0}/{summary.totalElectiveCredits || 0} tín chỉ</li>
                 <li>• Trạng thái: {summary.status || "Đủ điều kiện đăng ký"}</li>
               </ul>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="font-medium text-foreground">Môn đang chọn</p>
+              {selectedRows.length === 0 ? (
+                <p className="text-muted-foreground">Chưa chọn lớp nào</p>
+              ) : (
+                <ul className="space-y-1 text-muted-foreground">
+                  {selectedRows.map((row: any) => (
+                    <li key={row._id || row.id}>
+                      • {row.code || row.course?.code || "N/A"} — {row.courseName || row.course?.name || "N/A"}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="font-medium text-foreground">Môn đã đăng ký</p>
+              {enrollmentsData.length === 0 ? (
+                <p className="text-muted-foreground">Chưa có lớp đã đăng ký</p>
+              ) : (
+                <ul className="space-y-1 text-muted-foreground">
+                  {(enrollmentsData as any[]).map((row: any) => (
+                    <li key={row._id || row.id}>
+                      • {row.classId?.code || row.code || "N/A"} — {row.classId?.courseId?.name || row.courseName || "N/A"}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="rounded-xl border border-dashed p-3 text-xs">

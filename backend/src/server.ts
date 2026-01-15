@@ -47,6 +47,7 @@ import adminRegistrationWindowsRouter from './routes/admin/registration-windows.
 import adminSemestersRouter from './routes/admin/semesters.js';
 import adminRoomsRouter from './routes/admin/rooms.js';
 import adminCoursesRouter from './routes/admin/courses.js';
+import adminStudentsRouter from './routes/admin/students.js';
 import lecturersRouter from './routes/lecturers.js';
 
 app.use('/api/auth', authRouter);
@@ -60,6 +61,7 @@ app.use('/api/admin/registration-windows', adminRegistrationWindowsRouter);
 app.use('/api/admin/semesters', adminSemestersRouter);
 app.use('/api/admin/rooms', adminRoomsRouter);
 app.use('/api/admin/courses', adminCoursesRouter);
+app.use('/api/admin/students', adminStudentsRouter);
 app.use('/api/lecturers', lecturersRouter);
 
 // 404 handler

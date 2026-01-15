@@ -11,6 +11,7 @@ export interface ICourse extends Document {
   semester: number; // Học kỳ (1, 2, 3, etc.)
   isRequired: boolean; // Bắt buộc hay tự chọn
   prerequisites: mongoose.Types.ObjectId[]; // Điều kiện tiên quyết (danh sách Course IDs)
+  isGeneral: boolean; // Môn học đại cương (cho phép mọi ngành đăng ký)
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -71,6 +72,10 @@ const CourseSchema: Schema = new Schema(
         ref: 'Course',
       },
     ],
+    isGeneral: {
+      type: Boolean,
+      default: false,
+    },
     isActive: {
       type: Boolean,
       default: true,

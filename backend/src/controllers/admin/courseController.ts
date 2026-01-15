@@ -54,7 +54,7 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
  */
 export const createCourse = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code, name, credits, theoryCredits, practiceCredits, description, programId, semester, isRequired, prerequisites } = req.body;
+    const { code, name, credits, theoryCredits, practiceCredits, description, programId, semester, isRequired, prerequisites, isGeneral } = req.body;
 
     if (!code || !name || !credits) {
       res.status(400).json({
@@ -121,6 +121,7 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
       programId: programId || undefined,
       semester: semester || 1,
       isRequired: isRequired !== undefined ? isRequired : true,
+      isGeneral: isGeneral === true,
       prerequisites: prerequisites || [],
     });
 

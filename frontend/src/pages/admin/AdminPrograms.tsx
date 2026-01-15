@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { BookOpenCheck, FilePenLine, Plus, Trash2, Pencil, Unlink } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -53,7 +54,8 @@ const AdminPrograms = () => {
   const [isCoursesDialogOpen, setIsCoursesDialogOpen] = useState(false);
   const [isPrerequisitesDialogOpen, setIsPrerequisitesDialogOpen] = useState(false);
   const [isAssignCourseDialogOpen, setIsAssignCourseDialogOpen] = useState(false);
-  const [assignCourseId, setAssignCourseId] = useState<string>("");
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [assignCourseSearch, setAssignCourseSearch] = useState("");
   const [assignSemester, setAssignSemester] = useState<number>(1);
   const [assignCategory, setAssignCategory] = useState<"core" | "required" | "elective">("required");
   const [assignElectiveGroup, setAssignElectiveGroup] = useState<string>("");
@@ -136,14 +138,17 @@ const AdminPrograms = () => {
 
   // Assign existing course into selected program
   const assignCourseMutation = useMutation({
-    mutationFn: (payload: any) => adminProgramsAPI.addToCurriculum(selectedProgram!._id, payload),
+    mutationFn: async (payloads: any[]) => {
+      await Promise.all(payloads.map((payload) => adminProgramsAPI.addToCurriculum(selectedProgram!._id, payload)));
+    },
     onSuccess: () => {
       toast({
         title: "Thành công",
         description: "Đã thêm học phần vào CTĐT",
       });
       setIsAssignCourseDialogOpen(false);
-      setAssignCourseId("");
+      setSelectedCourseIds([]);
+      setAssignCourseSearch("");
       setAssignSemester(1);
       setAssignCategory("required");
       setAssignElectiveGroup("");
@@ -178,6 +183,13 @@ const AdminPrograms = () => {
   const handleViewPrerequisites = (program: Program) => {
     setSelectedProgram(program);
     setIsPrerequisitesDialogOpen(true);
+  };
+
+  const toggleSelectedCourse = (courseId: string, checked: boolean) => {
+    setSelectedCourseIds((prev) => {
+      if (checked) return prev.includes(courseId) ? prev : [...prev, courseId];
+      return prev.filter((id) => id !== courseId);
+    });
   };
 
   // Create program mutation
@@ -659,7 +671,19 @@ const AdminPrograms = () => {
       </Dialog>
 
       {/* Assign Existing Course Dialog */}
-      <Dialog open={isAssignCourseDialogOpen} onOpenChange={setIsAssignCourseDialogOpen}>
+      <Dialog
+        open={isAssignCourseDialogOpen}
+        onOpenChange={(open) => {
+          setIsAssignCourseDialogOpen(open);
+          if (!open) {
+            setSelectedCourseIds([]);
+            setAssignCourseSearch("");
+            setAssignSemester(1);
+            setAssignCategory("required");
+            setAssignElectiveGroup("");
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Thêm học phần đã tạo</DialogTitle>
@@ -671,21 +695,57 @@ const AdminPrograms = () => {
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <Label>Học phần</Label>
-              <Select value={assignCourseId} onValueChange={setAssignCourseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn học phần chưa gán CTĐT" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(unassignedCourses as any[]).map((c: any) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.code} — {c.name} ({c.credits} TC)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                placeholder="Tìm theo mã môn / tên môn"
+                value={assignCourseSearch}
+                onChange={(e) => setAssignCourseSearch(e.target.value)}
+              />
               <p className="text-xs text-muted-foreground">
-                Nếu danh sách trống, hãy tạo học phần ở menu "Quản lý học phần" trước.
+                Chọn nhiều học phần để thêm một lần. Nếu danh sách trống, hãy tạo học phần ở menu "Quản lý học phần" trước.
               </p>
+            </div>
+
+            <div className="rounded-lg border">
+              <div className="max-h-64 overflow-y-auto">
+                <table className="min-w-full text-xs md:text-sm">
+                  <thead className="border-b text-xs text-muted-foreground">
+                    <tr>
+                      <th className="py-2 pl-3 text-left font-medium">Chọn</th>
+                      <th className="py-2 text-left font-medium">Mã</th>
+                      <th className="py-2 text-left font-medium">Tên</th>
+                      <th className="py-2 pr-3 text-left font-medium">TC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(unassignedCourses as any[])
+                      .filter((c: any) => {
+                        const q = assignCourseSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          (c.code || "").toLowerCase().includes(q) ||
+                          (c.name || "").toLowerCase().includes(q)
+                        );
+                      })
+                      .map((c: any) => {
+                        const checked = selectedCourseIds.includes(c._id);
+                        return (
+                          <tr key={c._id} className="border-b last:border-b-0">
+                            <td className="py-2 pl-3">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => toggleSelectedCourse(c._id, Boolean(v))}
+                                aria-label={`Chọn học phần ${c.code}`}
+                              />
+                            </td>
+                            <td className="py-2">{c.code}</td>
+                            <td className="py-2">{c.name}</td>
+                            <td className="py-2 pr-3">{c.credits}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -733,20 +793,21 @@ const AdminPrograms = () => {
             </Button>
             <Button
               onClick={() => {
-                if (!assignCourseId || !selectedProgram?._id) {
+                if (!selectedCourseIds.length || !selectedProgram?._id) {
                   toast({
                     title: "Lỗi",
-                    description: "Vui lòng chọn học phần",
+                    description: "Vui lòng chọn ít nhất 1 học phần",
                     variant: "destructive",
                   });
                   return;
                 }
-                assignCourseMutation.mutate({
-                  courseId: assignCourseId,
+                const payloads = selectedCourseIds.map((courseId) => ({
+                  courseId,
                   category: assignCategory,
                   recommendedSemester: assignSemester,
                   electiveGroup: assignCategory === "elective" ? assignElectiveGroup : "",
-                });
+                }));
+                assignCourseMutation.mutate(payloads);
               }}
               disabled={assignCourseMutation.isPending}
             >

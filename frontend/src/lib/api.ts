@@ -279,6 +279,36 @@ export const adminRoomsAPI = {
   getSchedule: (roomId: string) => apiRequest(`/admin/rooms/${roomId}/schedule`),
 };
 
+// Admin - Students API
+export const adminStudentsAPI = {
+  getAll: (filters?: { programId?: string; keyword?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.programId) params.append("programId", filters.programId);
+    if (filters?.keyword) params.append("keyword", filters.keyword);
+    const query = params.toString();
+    return apiRequest(`/admin/students${query ? `?${query}` : ""}`);
+  },
+  create: (data: any) =>
+    apiRequest('/admin/students', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (studentId: string, data: any) =>
+    apiRequest(`/admin/students/${studentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (studentId: string) =>
+    apiRequest(`/admin/students/${studentId}`, {
+      method: 'DELETE',
+    }),
+  bulkCreate: (students: any[]) =>
+    apiRequest('/admin/students/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ students }),
+    }),
+};
+
 // Users API
 export const usersAPI = {
   getLecturers: () => apiRequest('/users/lecturers'),

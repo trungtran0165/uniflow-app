@@ -46,6 +46,7 @@ export const createCourseSchema = z.object({
   programId: z.string().min(1, 'Program ID is required'),
   semester: z.number().int().min(1, 'Semester must be at least 1'),
   isRequired: z.boolean().optional(),
+  isGeneral: z.boolean().optional(),
   prerequisites: z.array(z.string()).optional(),
 });
 

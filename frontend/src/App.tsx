@@ -30,6 +30,7 @@ const AdminClasses = lazy(() => import("./pages/admin/AdminClasses"));
 const AdminRegistrationWindows = lazy(() => import("./pages/admin/AdminRegistrationWindows"));
 const AdminCurriculumEditor = lazy(() => import("./pages/admin/AdminCurriculumEditor"));
 const AdminSemesters = lazy(() => import("./pages/admin/AdminSemesters"));
+const AdminStudents = lazy(() => import("./pages/admin/AdminStudents"));
 
 const queryClient = new QueryClient();
 
@@ -96,6 +97,7 @@ const App = () => (
             <Route path="programs" element={<AdminPrograms />} />
             <Route path="programs/curriculum-editor" element={<AdminCurriculumEditor />} />
             <Route path="semesters" element={<AdminSemesters />} />
+            <Route path="students" element={<AdminStudents />} />
             <Route path="classes" element={<AdminClasses />} />
             <Route path="registration-windows" element={<AdminRegistrationWindows />} />
           </Route>

@@ -82,6 +82,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: "CTĐT & Học phần", to: "/admin/programs", icon: School },
     { label: "Quản lý học phần", to: "/admin/courses", icon: BookOpen },
     { label: "Quản lý học kỳ", to: "/admin/semesters", icon: CalendarDays },
+    { label: "Quản lý sinh viên", to: "/admin/students", icon: Users },
     { label: "Kỳ học & Lớp học phần", to: "/admin/classes", icon: Users },
     { label: "Đợt ĐKHP", to: "/admin/registration-windows", icon: ListChecks },
   ],

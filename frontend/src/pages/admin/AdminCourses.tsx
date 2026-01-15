@@ -42,6 +42,7 @@ type Course = {
   description?: string;
   programId?: Program | null;
   prerequisites?: Array<{ _id: string; code: string; name: string }>;
+  isGeneral?: boolean;
 };
 
 export default function AdminCourses() {
@@ -60,6 +61,7 @@ export default function AdminCourses() {
     practiceCredits: 0,
     description: "",
     prerequisites: [] as string[], // courseIds
+    isGeneral: false,
   });
 
   const { data: programs = [] } = useQuery({
@@ -99,7 +101,7 @@ export default function AdminCourses() {
       toast({ title: "Thành công", description: "Đã tạo học phần" });
       setIsEditOpen(false);
       setEditingCourse(null);
-      setForm({ code: "", name: "", credits: 3, description: "", prerequisites: [] });
+      setForm({ code: "", name: "", theoryCredits: 3, practiceCredits: 0, description: "", prerequisites: [], isGeneral: false });
       queryClient.invalidateQueries({ queryKey: ["admin-courses"] });
     },
     onError: (err: any) =>
@@ -143,7 +145,7 @@ export default function AdminCourses() {
 
   const openCreate = () => {
     setEditingCourse(null);
-    setForm({ code: "", name: "", theoryCredits: 3, practiceCredits: 0, description: "", prerequisites: [] });
+    setForm({ code: "", name: "", theoryCredits: 3, practiceCredits: 0, description: "", prerequisites: [], isGeneral: false });
     setIsEditOpen(true);
   };
 
@@ -156,6 +158,7 @@ export default function AdminCourses() {
       practiceCredits: (course as any).practiceCredits ?? 0,
       description: course.description || "",
       prerequisites: (course.prerequisites || []).map((p) => p._id),
+      isGeneral: Boolean((course as any).isGeneral),
     });
     setIsEditOpen(true);
   };
@@ -186,6 +189,7 @@ export default function AdminCourses() {
       practiceCredits: practice,
       description: form.description,
       prerequisites: form.prerequisites,
+      isGeneral: form.isGeneral,
       // keep unassigned by default; assignment happens in CTĐT page
     };
 
@@ -288,6 +292,11 @@ export default function AdminCourses() {
                       <td className="py-2 pr-4 align-top">
                         <div className="space-y-0.5">
                           <div className="font-medium">{c.name}</div>
+                          {c.isGeneral ? (
+                            <Badge variant="secondary" className="w-fit">
+                              Đại cương
+                            </Badge>
+                          ) : null}
                           {c.description ? (
                             <div className="text-xs text-muted-foreground line-clamp-1">{c.description}</div>
                           ) : null}
@@ -383,6 +392,14 @@ export default function AdminCourses() {
                 placeholder="(tuỳ chọn)"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.isGeneral}
+                onChange={(e) => setForm((s) => ({ ...s, isGeneral: e.target.checked }))}
+              />
+              Môn học đại cương
+            </label>
 
             <div className="space-y-2">
               <Label>Tín chỉ lý thuyết</Label>
