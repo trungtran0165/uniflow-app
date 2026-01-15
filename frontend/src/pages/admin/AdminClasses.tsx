@@ -464,6 +464,15 @@ const AdminClasses = () => {
                       >
                         Đóng lớp
                       </Button>
+                    ) : cls.status === "closed" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updateClassStatusMutation.isPending}
+                        onClick={() => updateClassStatusMutation.mutate({ classId: cls._id, status: "open" })}
+                      >
+                        Mở lại lớp
+                      </Button>
                     ) : null}
                     <Button 
                       size="sm" 

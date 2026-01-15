@@ -183,23 +183,25 @@ const StudentTranscript = () => {
             <p className="text-muted-foreground">Chưa có dữ liệu bảng điểm</p>
           ) : (
             <Accordion type="single" collapsible className="space-y-2">
-              {transcriptTerms.map((term: any) => (
+              {transcriptTerms.map((term: any, termIndex: number) => (
                 <TranscriptTermAccordion
-                  key={term.id || term._id || term.semesterId?._id}
+                  key={term.id || term._id || term.semesterId?._id || `term-${termIndex}`}
                   term={{
-                    id: term.id || term._id || term.semesterId?._id,
+                    id: term.id || term._id || term.semesterId?._id || `term-${termIndex}`,
                     label: term.semester?.name || term.semesterId?.name || "Học kỳ",
                     gpa: term.gpa || 0,
                     credits: term.credits || 0,
-                    courses: term.courses?.map((course: any) => ({
-                      code: course.code || course.courseCode,
-                      name: course.name || course.courseName,
+                    courses: term.courses?.map((course: any, courseIndex: number) => ({
+                      code: course.code || course.courseCode || `COURSE-${courseIndex}`,
+                      name: course.name || course.courseName || "N/A",
                       credits: course.credits || 0,
                       grade: course.grade || course.letterGrade || "N/A",
                       score: course.score || course.finalGrade || 0,
+                      midtermScore: course.midtermScore,
+                      finalScore: course.finalScore,
                     })) || [],
                   }}
-                  value={term.id || term._id || term.semesterId?._id}
+                  value={term.id || term._id || term.semesterId?._id || `term-${termIndex}`}
                 />
               ))}
             </Accordion>

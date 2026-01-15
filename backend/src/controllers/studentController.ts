@@ -8,6 +8,47 @@ import Semester from '../models/Semester.js';
 import mongoose from 'mongoose';
 
 /**
+ * Helper: Calculate letter grade from score
+ */
+function calculateLetterGrade(score: number): string {
+  if (score >= 8.5) return 'A';
+  if (score >= 8.0) return 'B+';
+  if (score >= 7.0) return 'B';
+  if (score >= 6.5) return 'C+';
+  if (score >= 5.5) return 'C';
+  if (score >= 5.0) return 'D+';
+  if (score >= 4.0) return 'D';
+  return 'F';
+}
+
+/**
+ * Helper: Calculate GPA from course list
+ */
+function calculateGPA(courses: any[]): number {
+  let totalPoints = 0;
+  let totalCredits = 0;
+  courses.forEach((course) => {
+    if (course.finalGrade > 0) {
+      totalPoints += course.finalGrade * (course.credits || 0);
+      totalCredits += course.credits || 0;
+    }
+  });
+  return totalCredits > 0 ? totalPoints / totalCredits : 0;
+}
+
+/**
+ * Helper: Get ranking from GPA
+ */
+function getRanking(gpa: number): string {
+  if (gpa >= 3.6) return 'Xuất sắc';
+  if (gpa >= 3.2) return 'Giỏi';
+  if (gpa >= 2.5) return 'Khá';
+  if (gpa >= 2.0) return 'Trung bình';
+  if (gpa > 0) return 'Yếu';
+  return 'Chưa có';
+}
+
+/**
  * Helper function to find student by various identifiers
  * Tries: _id (ObjectId), studentId (MSSV string), userId (ObjectId)
  */
@@ -50,7 +91,7 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
     // Get current active semester
     const currentSemester = await Semester.findOne({ isActive: true });
     
-    // Get current enrollments
+    // Get current enrollments (registered in current semester)
     const enrollments = await Enrollment.find({
       studentId: student._id,
       status: { $in: ['registered', 'waitlist'] },
@@ -59,7 +100,7 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
       populate: { path: 'courseId', select: 'code name credits' },
     });
 
-    // Calculate current credits
+    // Calculate current credits (enrolled this semester)
     const currentCredits = enrollments.reduce((sum, enrollment: any) => {
       if (enrollment.status === 'registered' && enrollment.classId?.courseId) {
         return sum + (enrollment.classId.courseId.credits || 0);
@@ -67,17 +108,37 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
       return sum;
     }, 0);
 
-    // Get GPA (simplified - will implement full calculation later)
+    // Get all grades to calculate GPA and accumulated credits
     const grades = await Grade.find({
       studentId: student._id,
-    }).populate('classId');
+    }).populate({
+      path: 'classId',
+      populate: { path: 'courseId', select: 'code name credits' },
+    });
+
+    // Calculate GPA and accumulated credits
+    let totalPoints = 0;
+    let totalCredits = 0;
+    grades.forEach((grade: any) => {
+      const credits = grade.classId?.courseId?.credits || 0;
+      const finalGrade = grade.finalGrade || 0;
+      if (finalGrade > 0) {
+        totalPoints += finalGrade * credits;
+        totalCredits += credits;
+      }
+    });
+
+    const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
 
     res.json({
       success: true,
       data: {
         currentSemester: currentSemester?.name || 'N/A',
-        creditsEnrolled: currentCredits,
-        gpa: 0, // TODO: Calculate GPA
+        currentCredits, // Credits enrolled this semester
+        creditsAccumulated: totalCredits, // Total credits earned
+        creditsTarget: 130, // Default graduation requirement
+        gpa: parseFloat(gpa.toFixed(2)),
+        gpaDelta: 0, // TODO: Calculate GPA change
         alerts: [],
       },
     });
@@ -118,28 +179,62 @@ export const getTranscript = async (req: Request, res: Response): Promise<void> 
 
     // Group by semester
     const terms: Record<string, any> = {};
+    let totalPoints = 0;
+    let totalCredits = 0;
+
     grades.forEach((grade: any) => {
       const semesterId = grade.classId?.semesterId?._id?.toString();
       if (!semesterId) return;
 
       if (!terms[semesterId]) {
         terms[semesterId] = {
+          _id: semesterId,
+          semesterId: grade.classId.semesterId,
           semester: grade.classId.semesterId,
           courses: [],
+          gpa: 0,
+          credits: 0,
         };
       }
 
+      const credits = grade.classId?.courseId?.credits || 0;
+      const finalGrade = grade.finalGrade || 0;
+
       terms[semesterId].courses.push({
-        course: grade.classId.courseId,
-        finalGrade: grade.finalGrade,
-        letterGrade: grade.letterGrade,
+        code: grade.classId.courseId?.code || 'N/A',
+        courseCode: grade.classId.courseId?.code || 'N/A',
+        name: grade.classId.courseId?.name || 'N/A',
+        courseName: grade.classId.courseId?.name || 'N/A',
+        credits,
+        finalGrade,
+        score: finalGrade,
+        letterGrade: grade.letterGrade || calculateLetterGrade(finalGrade),
+        grade: grade.letterGrade || calculateLetterGrade(finalGrade),
+        midtermScore: grade.midtermScore,
+        finalScore: grade.finalScore,
       });
+
+      // Calculate semester GPA
+      terms[semesterId].credits += credits;
+      terms[semesterId].gpa = calculateGPA(terms[semesterId].courses);
+
+      // Accumulate total
+      if (finalGrade > 0) {
+        totalPoints += finalGrade * credits;
+        totalCredits += credits;
+      }
     });
+
+    const cumulativeGpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
 
     res.json({
       success: true,
       data: {
         terms: Object.values(terms),
+        cumulativeGpa,
+        cumulativeGpa4: cumulativeGpa,
+        cumulativeCredits: totalCredits,
+        ranking: getRanking(cumulativeGpa),
       },
     });
   } catch (error) {
@@ -327,25 +422,41 @@ export const getTimetableByWeek = async (req: Request, res: Response): Promise<v
       path: 'classId',
       match: { semesterId: currentSemester._id },
       populate: [
-        { path: 'courseId', select: 'code name' },
+        { path: 'courseId', select: 'code name credits' },
         { path: 'schedule.roomId', select: 'code name' },
       ],
     });
 
-    // Format timetable data
-    const timetableData = enrollments
+    // Format schedule slots for timetable
+    const scheduleSlots: any[] = [];
+    enrollments
       .filter((enrollment: any) => enrollment.classId)
-      .map((enrollment: any) => ({
-        class: enrollment.classId,
-        course: enrollment.classId.courseId,
-        schedule: enrollment.classId.schedule,
-      }));
+      .forEach((enrollment: any) => {
+        const classData = enrollment.classId;
+        const courseData = classData.courseId;
+        
+        classData.schedule?.forEach((slot: any) => {
+          scheduleSlots.push({
+            _id: slot._id,
+            classId: classData._id,
+            classCode: classData.code,
+            courseName: courseData?.name || classData.name || 'N/A',
+            courseCode: courseData?.code || 'N/A',
+            dayOfWeek: slot.dayOfWeek,
+            period: slot.period,
+            roomId: slot.roomId?._id,
+            roomCode: slot.roomId?.code || 'N/A',
+            roomName: slot.roomId?.name || '',
+            status: 'normal',
+          });
+        });
+      });
 
     res.json({
       success: true,
       data: {
-        week: weekNum,
-        days: timetableData, // TODO: Format by day of week
+        weekLabel: `Tuần ${weekNum}`,
+        schedule: scheduleSlots,
       },
     });
   } catch (error) {

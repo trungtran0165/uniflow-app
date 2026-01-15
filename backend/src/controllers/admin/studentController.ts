@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import Student from '../../models/Student.js';
 import User from '../../models/User.js';
 import Program from '../../models/Program.js';
+import { createMoodleUserOnly } from '../../services/moodleService.js';
 
 /**
  * GET /api/admin/students
@@ -139,6 +140,16 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
     const populated = await Student.findById(student._id)
       .populate('userId', 'name email')
       .populate('programId', 'code name cohort major majorLabel system');
+
+    // Auto-create Moodle user (async, don't block response)
+    createMoodleUserOnly({
+      studentId: String(studentId).trim(),
+      email: normalizedEmail,
+      name: name.trim(),
+    }).catch(error => {
+      console.error('Failed to create Moodle user (async):', error);
+      // Don't fail the request, just log the error
+    });
 
     res.status(201).json({
       success: true,

@@ -102,9 +102,14 @@ export const getClassStudents = async (req: Request, res: Response): Promise<voi
       .sort({ enrolledAt: 1 });
 
     const students = enrollments.map((enrollment: any) => ({
+      _id: enrollment._id,
       enrollmentId: enrollment._id,
-      student: enrollment.studentId,
+      studentId: enrollment.studentId?.studentId || 'N/A',
+      name: enrollment.studentId?.userId?.name || 'N/A',
+      email: enrollment.studentId?.userId?.email || 'N/A',
+      status: enrollment.status,
       enrolledAt: enrollment.enrolledAt,
+      student: enrollment.studentId, // For backward compatibility
     }));
 
     res.json({
@@ -202,14 +207,19 @@ export const updateGrade = async (req: Request, res: Response): Promise<void> =>
       });
     }
 
-    // Get grade config for this class
-    const gradeConfig = await GradeConfig.findOne({ classId });
+    // Get or create grade config for this class
+    let gradeConfig = await GradeConfig.findOne({ classId });
     if (!gradeConfig) {
-      res.status(400).json({
-        success: false,
-        error: 'Grade configuration not found for this class. Please configure grading components first.',
+      // Auto-create default grade config
+      gradeConfig = await GradeConfig.create({
+        classId,
+        components: [
+          { name: 'Điểm quá trình', weight: 30, maxScore: 10 },
+          { name: 'Điểm cuối kỳ', weight: 70, maxScore: 10 },
+        ],
+        isLocked: false,
       });
-      return;
+      console.log(`✅ Auto-created GradeConfig for class ${classId}`);
     }
 
     // Check if locked
@@ -324,14 +334,19 @@ export const bulkUpdateGrades = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Get grade config once (reuse for all students)
-    const gradeConfig = await GradeConfig.findOne({ classId });
+    // Get or create grade config (reuse for all students)
+    let gradeConfig = await GradeConfig.findOne({ classId });
     if (!gradeConfig) {
-      res.status(400).json({
-        success: false,
-        error: 'Grade configuration not found for this class',
+      // Auto-create default grade config
+      gradeConfig = await GradeConfig.create({
+        classId,
+        components: [
+          { name: 'Điểm quá trình', weight: 30, maxScore: 10 },
+          { name: 'Điểm cuối kỳ', weight: 70, maxScore: 10 },
+        ],
+        isLocked: false,
       });
-      return;
+      console.log(`✅ Auto-created GradeConfig for class ${classId}`);
     }
 
     // Check if locked

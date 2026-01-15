@@ -9,6 +9,7 @@ import Grade from '../models/Grade.js';
 import AuditLog from '../models/AuditLog.js';
 import mongoose from 'mongoose';
 import { checkPrerequisitesRecursive } from '../utils/prerequisites.js';
+import { syncEnrollmentToMoodle } from '../services/moodleService.js';
 
 /**
  * Helper function to find student by various identifiers
@@ -325,16 +326,19 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
     const existingEnrollment = await Enrollment.findOne({
       studentId: student._id,
       classId: classDoc._id,
-      status: { $in: ['registered', 'waitlist'] },
     }).session(session);
 
     if (existingEnrollment) {
-      await session.abortTransaction();
-      res.status(409).json({
-        success: false,
-        error: 'Already enrolled in this class',
-      });
-      return;
+      // If currently registered or waitlisted, return conflict
+      if (['registered', 'waitlist'].includes(existingEnrollment.status)) {
+        await session.abortTransaction();
+        res.status(409).json({
+          success: false,
+          error: 'Already enrolled in this class',
+        });
+        return;
+      }
+      // If previously cancelled/dropped, we'll reuse this record below
     }
 
     // isForcedEnrollment already defined above (used for bypassing validations)
@@ -560,21 +564,39 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
     }
 
 
-    // Create enrollment (within transaction)
-    const enrollment = new Enrollment({
-      studentId: student._id,
-      classId: classDoc._id,
-      registrationWindowId: activeWindow._id,
-      status: enrollmentStatus,
-      waitlistPosition,
-      isForced: isForcedEnrollment || false,
-      forcedBy: isForcedEnrollment ? req.user!.id : undefined,
-      forcedAt: isForcedEnrollment ? new Date() : undefined,
-      forceReason: isForcedEnrollment ? forceReason : undefined,
-      countAs,
-    });
+    // Create or update enrollment (within transaction)
+    let enrollment;
+    if (existingEnrollment && ['cancelled', 'dropped'].includes(existingEnrollment.status)) {
+      // Reuse existing enrollment record
+      existingEnrollment.status = enrollmentStatus;
+      existingEnrollment.registrationWindowId = activeWindow._id;
+      existingEnrollment.waitlistPosition = waitlistPosition;
+      existingEnrollment.isForced = isForcedEnrollment || false;
+      existingEnrollment.forcedBy = isForcedEnrollment ? req.user!.id : undefined;
+      existingEnrollment.forcedAt = isForcedEnrollment ? new Date() : undefined;
+      existingEnrollment.forceReason = isForcedEnrollment ? forceReason : undefined;
+      existingEnrollment.countAs = countAs;
+      existingEnrollment.cancelledAt = undefined;
+      existingEnrollment.enrolledAt = new Date();
+      await existingEnrollment.save({ session });
+      enrollment = existingEnrollment;
+    } else {
+      // Create new enrollment
+      enrollment = new Enrollment({
+        studentId: student._id,
+        classId: classDoc._id,
+        registrationWindowId: activeWindow._id,
+        status: enrollmentStatus,
+        waitlistPosition,
+        isForced: isForcedEnrollment || false,
+        forcedBy: isForcedEnrollment ? req.user!.id : undefined,
+        forcedAt: isForcedEnrollment ? new Date() : undefined,
+        forceReason: isForcedEnrollment ? forceReason : undefined,
+        countAs,
+      });
 
-    await enrollment.save({ session });
+      await enrollment.save({ session });
+    }
 
     // Audit log for forced enrollment
     if (isForcedEnrollment) {
@@ -601,6 +623,28 @@ export const enroll = async (req: Request, res: Response): Promise<void> => {
 
     // Commit transaction
     await session.commitTransaction();
+
+    // Sync to Moodle asynchronously (don't block response)
+    if (enrollmentStatus === 'registered') {
+      const studentWithUser = await Student.findById(student._id).populate('userId');
+      const courseData = classDoc.courseId as any;
+      
+      if (studentWithUser && (studentWithUser.userId as any)?.email) {
+        const userInfo = studentWithUser.userId as any;
+        
+        syncEnrollmentToMoodle({
+          studentEmail: userInfo.email,
+          studentName: userInfo.name,
+          studentId: studentWithUser.studentId,
+          courseCode: courseData.code || classDoc.code,
+          courseName: courseData.name || classDoc.name || classDoc.code,
+          credits: courseData.credits,
+        }).catch(error => {
+          console.error('Failed to sync enrollment to Moodle (async):', error);
+          // Don't fail the request, just log the error
+        });
+      }
+    }
 
     res.status(201).json({
       success: true,

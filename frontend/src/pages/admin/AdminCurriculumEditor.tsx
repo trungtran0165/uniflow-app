@@ -142,7 +142,7 @@ const AdminCurriculumEditor = () => {
 
   const handleSaveToBrowser = () => {
     saveCurriculumPrograms(programs);
-    toast({ title: "Đã lưu", description: "Đã lưu cấu hình CTĐT vào trình duyệt (localStorage)." });
+    toast({ title: "Đã lưu", description: "Đã lưu cấu hình CTĐT." });
   };
 
   const handleResetToDefault = () => {
@@ -159,7 +159,7 @@ const AdminCurriculumEditor = () => {
             Nội dung CTĐT (HTML)
           </h1>
           <p className="text-sm text-muted-foreground">
-            Chỉnh sửa nội dung hiển thị cho sinh viên theo hệ đào tạo, khóa và ngành. (Frontend-only: dùng import/export & lưu tạm localStorage.)
+            Chỉnh sửa nội dung hiển thị cho sinh viên theo hệ đào tạo, khóa và ngành.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

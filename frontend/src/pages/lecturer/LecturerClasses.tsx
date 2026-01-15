@@ -85,7 +85,7 @@ const LecturerClasses = () => {
           {classesData.length === 0 ? (
             <p className="text-muted-foreground">Chưa có lớp nào</p>
           ) : (
-            classesData.map((cls: any) => {
+            classesData.map((cls: any, index: number) => {
               const semesterName = cls.semesterId?.name || cls.semester || "N/A";
               const courseName = cls.courseId?.name || cls.courseName || "N/A";
               const enrolled = cls.enrolled || 0;
@@ -94,7 +94,7 @@ const LecturerClasses = () => {
 
               return (
                 <div
-                  key={cls._id || cls.id}
+                  key={cls._id || cls.id || `class-${index}`}
                   className="flex flex-col gap-2 rounded-lg border bg-card/80 px-3 py-2 md:flex-row md:items-center md:justify-between"
                 >
                   <div>
